@@ -6,10 +6,12 @@ import random
 import smtplib
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from pydantic import BaseModel, EmailStr, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,7 @@ from backend.db.database import get_db
 from backend.db.models import User
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 class RegisterRequest(BaseModel):
@@ -164,7 +167,8 @@ async def google_client_id() -> dict[str, Any]:
 
 
 @router.post("/register")
-async def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+@limiter.limit("5/minute")
+async def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
 	email = str(payload.email).strip().lower()
 	existing = db.query(User).filter(User.email == email).first()
 
@@ -218,7 +222,8 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> d
 
 
 @router.post("/resend-code")
-async def resend_code(payload: ResendCodeRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+@limiter.limit("3/minute")
+async def resend_code(request: Request, payload: ResendCodeRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
 	email = str(payload.email).strip().lower()
 	user = db.query(User).filter(User.email == email).first()
 	if not user:
@@ -274,7 +279,8 @@ async def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db
 
 
 @router.post("/login")
-async def login(payload: LoginRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+@limiter.limit("10/minute")
+async def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
 	email = str(payload.email).strip().lower()
 	user = db.query(User).filter(User.email == email).first()
 
@@ -295,7 +301,8 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)) -> dict[st
 
 
 @router.post("/google")
-async def google_auth(payload: GoogleAuthRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+@limiter.limit("10/minute")
+async def google_auth(request: Request, payload: GoogleAuthRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
 	if not config.GOOGLE_CLIENT_ID:
 		raise HTTPException(
 			status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

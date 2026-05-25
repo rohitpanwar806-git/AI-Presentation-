@@ -1,1339 +1,556 @@
 /**
- * AI Presentation Avatar Frontend
- * Interactive auth panel + profile manager + admin user panel.
+ * PresenterAI — Frontend Application
+ * Modern SPA for AI Presentation Avatar Platform
  */
 
-const CONFIG = {
-  backendUrl:
-    window.BACKEND_URL ||
-    localStorage.getItem('backendUrl') ||
-    (window.location.hostname === 'localhost' ? 'http://localhost:8000' : null),
-  environment: window.location.hostname === 'localhost' ? 'development' : 'production',
-  googleClientId: window.GOOGLE_CLIENT_ID || localStorage.getItem('googleClientId') || null,
-};
+// ==================== CONFIG ====================
+const API_BASE = window.APP_CONFIG?.API_URL || 'https://presentation-api-558900038680.asia-south1.run.app';
+const GOOGLE_CLIENT_ID = window.APP_CONFIG?.GOOGLE_CLIENT_ID || '';
 
-const appState = {
-  backendConnected: false,
-  authToken: localStorage.getItem('auth_token') || null,
+// ==================== STATE ====================
+let state = {
   user: null,
-  pendingAuthMode: 'signin',
-  googleClientId: null,
-  signupEmail: null,
-  otpResendTimer: 0,
-  otpResendInterval: null,
+  token: null,
+  currentTab: 'signin',
+  presentations: [],
+  isLoading: false
 };
 
-async function initializeApp() {
-  bindUiEvents();
-  displayConfiguration();
+// ==================== INITIALIZATION ====================
+document.addEventListener('DOMContentLoaded', () => {
+  initNavbar();
+  initUploadZone();
+  initGoogleAuth();
+  checkExistingSession();
+});
 
-  await initializeAuth();
+function initNavbar() {
+  const navbar = document.getElementById('navbar');
+  let lastScroll = 0;
+  window.addEventListener('scroll', () => {
+    const scrollY = window.scrollY;
+    navbar.classList.toggle('scrolled', scrollY > 50);
+    lastScroll = scrollY;
+  }, { passive: true });
 }
 
-function bindUiEvents() {
-  const authToggleBtn = document.getElementById('authToggleBtn');
-  const authPanel = document.getElementById('authPanel');
+function initUploadZone() {
+  const zone = document.getElementById('uploadZone');
+  const input = document.getElementById('fileInput');
+  if (!zone || !input) return;
+
+  zone.addEventListener('click', (e) => {
+    if (e.target !== input) input.click();
+  });
+
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    zone.classList.add('dragover');
+  });
+
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('dragover');
+  });
+
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  });
+
+  input.addEventListener('change', () => {
+    if (input.files.length) {
+      handleFileUpload(input.files[0]);
+    }
+  });
+}
+
+function initGoogleAuth() {
+  if (!GOOGLE_CLIENT_ID) return;
+  
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.async = true;
+  script.defer = true;
+  script.onload = () => {
+    if (window.google) {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleResponse
+      });
+    }
+  };
+  document.head.appendChild(script);
+}
+
+function checkExistingSession() {
+  const token = localStorage.getItem('auth_token');
+  const user = localStorage.getItem('auth_user');
+  if (token && user) {
+    try {
+      state.token = token;
+      state.user = JSON.parse(user);
+      showDashboard();
+    } catch {
+      clearSession();
+    }
+  }
+}
+
+// ==================== AUTH ====================
+function openAuth(tab = 'signin') {
+  const modal = document.getElementById('authModal');
+  modal.classList.add('active');
+  switchTab(tab);
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAuth() {
+  const modal = document.getElementById('authModal');
+  modal.classList.remove('active');
+  document.body.style.overflow = '';
+  hideAuthMessages();
+}
+
+function switchTab(tab) {
+  state.currentTab = tab;
   const tabSignin = document.getElementById('tabSignin');
   const tabSignup = document.getElementById('tabSignup');
-  const signinBtn = document.getElementById('signinBtn');
-  const sendCodeBtn = document.getElementById('sendCodeBtn');
-  const verifyAccountBtn = document.getElementById('verifyAccountBtn');
-  const resendCodeBtn = document.getElementById('resendCodeBtn');
-  const signOutQuickBtn = document.getElementById('signOutQuickBtn');
-  const saveProfileBtn = document.getElementById('saveProfileBtn');
-  const refreshAdminBtn = document.getElementById('refreshAdminBtn');
-  const refreshStatusBtn = document.getElementById('refreshStatusBtn');
-  const profileAvatarUrl = document.getElementById('profileAvatarUrl');
-  
-  // Profile dropdown events
-  const userChip = document.getElementById('userChip');
-  const profileDropdown = document.getElementById('profileDropdown');
-  const closeProfileBtn = document.getElementById('closeProfileBtn');
-  const saveProfileDropdownBtn = document.getElementById('saveProfileDropdownBtn');
-  const dropdownProfileAvatarUrl = document.getElementById('dropdownProfileAvatarUrl');
+  const signupFields = document.getElementById('signupFields');
+  const verificationFields = document.getElementById('verificationFields');
+  const title = document.getElementById('authTitle');
+  const subtitle = document.getElementById('authSubtitle');
+  const btnText = document.getElementById('authBtnText');
 
-  if (authToggleBtn) {
-    authToggleBtn.addEventListener('click', () => {
-      authPanel.classList.toggle('open');
-    });
-  }
+  hideAuthMessages();
 
-  document.addEventListener('click', (event) => {
-    if (!authPanel || !authToggleBtn) return;
-    const clickInside = authPanel.contains(event.target) || authToggleBtn.contains(event.target);
-    if (!clickInside) authPanel.classList.remove('open');
-  });
-
-  if (tabSignin) tabSignin.addEventListener('click', () => switchAuthTab('signin'));
-  if (tabSignup) tabSignup.addEventListener('click', () => switchAuthTab('signup'));
-  if (signinBtn) signinBtn.addEventListener('click', signInWithEmail);
-  if (sendCodeBtn) sendCodeBtn.addEventListener('click', sendVerificationCode);
-  if (verifyAccountBtn) verifyAccountBtn.addEventListener('click', verifyEmailAndCreateAccount);
-  if (resendCodeBtn) resendCodeBtn.addEventListener('click', resendVerificationCode);
-  if (signOutQuickBtn) signOutQuickBtn.addEventListener('click', signOut);
-  if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfile);
-  if (refreshAdminBtn) refreshAdminBtn.addEventListener('click', loadAdminUsers);
-  if (refreshStatusBtn) refreshStatusBtn.addEventListener('click', testBackendConnectivity);
-
-  if (profileAvatarUrl) {
-    profileAvatarUrl.addEventListener('input', () => {
-      const preview = document.getElementById('profileAvatarPreview');
-      const url = profileAvatarUrl.value.trim();
-      if (preview) preview.src = url || fallbackAvatar('User');
-    });
-  }
-
-  // Profile dropdown events
-  if (userChip) {
-    userChip.addEventListener('click', (e) => {
-      if (!appState.authToken) return;
-      e.stopPropagation();
-      profileDropdown.classList.toggle('hidden');
-    });
-  }
-
-  if (closeProfileBtn) {
-    closeProfileBtn.addEventListener('click', () => {
-      profileDropdown.classList.add('hidden');
-    });
-  }
-
-  document.addEventListener('click', (event) => {
-    if (!profileDropdown || !userChip) return;
-    const clickInside = profileDropdown.contains(event.target) || userChip.contains(event.target);
-    if (!clickInside) profileDropdown.classList.add('hidden');
-  });
-
-  if (saveProfileDropdownBtn) {
-    saveProfileDropdownBtn.addEventListener('click', saveProfileFromDropdown);
-  }
-
-  // Sign out button in dropdown
-  const signOutDropdownBtn = document.getElementById('signOutDropdownBtn');
-  if (signOutDropdownBtn) {
-    signOutDropdownBtn.addEventListener('click', signOut);
-  }
-
-  if (dropdownProfileAvatarUrl) {
-    dropdownProfileAvatarUrl.addEventListener('input', () => {
-      const preview = document.getElementById('dropdownProfileAvatar');
-      const url = dropdownProfileAvatarUrl.value.trim();
-      if (preview) preview.src = url || fallbackAvatar(document.getElementById('dropdownProfileName')?.value || 'User');
-    });
-  }
-
-  // Document upload events
-  const uploadArea = document.getElementById('uploadArea');
-  const documentUpload = document.getElementById('documentUpload');
-
-  if (uploadArea && documentUpload) {
-    uploadArea.addEventListener('click', () => documentUpload.click());
-
-    // File input change
-    documentUpload.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) handleDocumentUpload(file);
-    });
-
-    // Drag and drop
-    uploadArea.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      uploadArea.classList.add('drag-over');
-    });
-
-    uploadArea.addEventListener('dragleave', () => {
-      uploadArea.classList.remove('drag-over');
-    });
-
-    uploadArea.addEventListener('drop', (e) => {
-      e.preventDefault();
-      uploadArea.classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if (file) handleDocumentUpload(file);
-    });
+  if (tab === 'signin') {
+    tabSignin.classList.add('active');
+    tabSignup.classList.remove('active');
+    signupFields.style.display = 'none';
+    verificationFields.style.display = 'none';
+    title.textContent = 'Welcome back';
+    subtitle.textContent = 'Sign in to your account to continue';
+    btnText.textContent = 'Sign In';
+  } else {
+    tabSignin.classList.remove('active');
+    tabSignup.classList.add('active');
+    signupFields.style.display = 'block';
+    verificationFields.style.display = 'none';
+    title.textContent = 'Create your account';
+    subtitle.textContent = 'Start creating AI presentations for free';
+    btnText.textContent = 'Create Account';
   }
 }
 
-async function initializeAuth() {
-  if (!CONFIG.backendUrl) {
-    setPanelMessage('Set BACKEND_URL first to enable sign in.', true);
-    return;
-  }
+async function handleAuth(event) {
+  event.preventDefault();
+  if (state.isLoading) return;
 
-  if (appState.authToken) {
-    const loaded = await loadProfile();
-    if (!loaded) clearSession();
-  }
-
-  const clientConfig = await fetchGoogleClientId();
-  if (clientConfig.configured && clientConfig.client_id) {
-    appState.googleClientId = clientConfig.client_id;
-    await renderGoogleButtons();
-  }
-
-  updateAuthUi();
-}
-
-function switchAuthTab(tabName) {
-  const signinView = document.getElementById('signinView');
-  const signupView = document.getElementById('signupView');
-  const tabSignin = document.getElementById('tabSignin');
-  const tabSignup = document.getElementById('tabSignup');
-
-  const signin = tabName === 'signin';
-  signinView.classList.toggle('active', signin);
-  signupView.classList.toggle('active', !signin);
-  tabSignin.classList.toggle('active', signin);
-  tabSignup.classList.toggle('active', !signin);
-  
-  // Set pending auth mode based on active tab
-  appState.pendingAuthMode = signin ? 'signin' : 'signup';
-}
-
-async function fetchGoogleClientId() {
-  try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/google/client-id`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!res.ok) {
-      return { configured: false, client_id: null };
-    }
-
-    const payload = await res.json();
-    if ((!payload || !payload.client_id) && CONFIG.googleClientId) {
-      return { configured: true, client_id: CONFIG.googleClientId };
-    }
-
-    return payload;
-  } catch (error) {
-    console.error('Failed to fetch Google client id', error);
-    if (CONFIG.googleClientId) {
-      return { configured: true, client_id: CONFIG.googleClientId };
-    }
-    return { configured: false, client_id: null };
-  }
-}
-
-async function renderGoogleButtons() {
-  if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-    setPanelMessage('Google sign-in is still loading. Refresh in a moment.', true);
-    return;
-  }
-
-  window.google.accounts.id.initialize({
-    client_id: appState.googleClientId,
-    callback: handleGoogleCredential,
-    ux_mode: 'popup',
-  });
-
-  const signInHost = document.getElementById('googleSignInBtn');
-  const signUpHost = document.getElementById('googleSignUpBtn');
-
-  // Render Sign In button with minimal official parameters
-  if (signInHost) {
-    signInHost.innerHTML = '';
-    try {
-      window.google.accounts.id.renderButton(signInHost, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        logo_alignment: 'left',
-        // Note: width removed as it may cause rendering issues
-      });
-    } catch (err) {
-      console.warn('Google Sign-In button rendering failed:', err);
-      signInHost.innerHTML = '<button class="btn btn-soft" style="width:100%;">Sign in with Google (fallback)</button>';
-    }
-  }
-
-  // Render Sign Up button with minimal official parameters
-  if (signUpHost) {
-    signUpHost.innerHTML = '';
-    try {
-      window.google.accounts.id.renderButton(signUpHost, {
-        type: 'standard',
-        theme: 'filled_blue',
-        size: 'large',
-        text: 'signup_with',
-        logo_alignment: 'left',
-        // Note: width removed as it may cause rendering issues
-      });
-    } catch (err) {
-      console.warn('Google Sign-Up button rendering failed:', err);
-      signUpHost.innerHTML = '<button class="btn btn-soft" style="width:100%;">Sign up with Google (fallback)</button>';
-    }
-  }
-}
-
-async function signInWithEmail() {
-  const email = (document.getElementById('signinEmail')?.value || '').trim();
-  const password = (document.getElementById('signinPassword')?.value || '').trim();
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
 
   if (!email || !password) {
-    setPanelMessage('Please enter email and password.', true);
+    showAuthError('Please fill in all required fields');
     return;
   }
 
-  setPanelMessage('Signing in...', false);
+  if (password.length < 8) {
+    showAuthError('Password must be at least 8 characters');
+    return;
+  }
+
+  setAuthLoading(true);
 
   try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const payload = await res.json();
-    if (!res.ok) {
-      throw new Error(payload.detail || 'Sign in failed');
+    if (state.currentTab === 'signin') {
+      await login(email, password);
+    } else {
+      await register(email, password);
     }
-
-    applyAuthPayload(payload);
-    setPanelMessage('Signed in successfully.', false);
-  } catch (error) {
-    setPanelMessage(`Sign in failed: ${error.message}`, true);
+  } catch (err) {
+    showAuthError(err.message || 'An unexpected error occurred');
+  } finally {
+    setAuthLoading(false);
   }
 }
 
-async function sendVerificationCode() {
-  const firstName = (document.getElementById('signupFirstName')?.value || '').trim();
-  const lastName = (document.getElementById('signupLastName')?.value || '').trim();
-  const gender = (document.getElementById('signupGender')?.value || '').trim();
-  const email = (document.getElementById('signupEmail')?.value || '').trim();
-  const password = (document.getElementById('signupPassword')?.value || '').trim();
+async function login(email, password) {
+  const res = await apiRequest('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password })
+  });
 
-  if (!firstName || !lastName || !gender || !email || !password) {
-    setPanelMessage('Please complete all sign-up fields.', true);
-    return;
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'Invalid email or password');
   }
 
-  setPanelMessage('Sending verification code to your email...', false);
-
-  try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ first_name: firstName, last_name: lastName, gender, email, password }),
-    });
-
-    const payload = await res.json();
-    if (!res.ok) {
-      throw new Error(payload.detail || 'Could not start registration');
-    }
-
-    appState.signupEmail = email;
-    document.getElementById('verifyCodeRow')?.classList.remove('hidden');
-    setPanelMessage(payload.message || 'Verification code sent. Check your email.', false);
-    
-    // Start OTP resend cooldown timer (60 seconds)
-    startOtpResendTimer(60);
-  } catch (error) {
-    setPanelMessage(`Could not send code: ${error.message}`, true);
-  }
+  const data = await res.json();
+  saveSession(data.access_token, data.user || { email });
+  closeAuth();
+  showDashboard();
+  showToast('Welcome back!', 'success');
 }
 
-async function verifyEmailAndCreateAccount() {
-  const email = (document.getElementById('signupEmail')?.value || appState.signupEmail || '').trim();
-  const code = (document.getElementById('signupCode')?.value || '').trim();
+async function register(email, password) {
+  const firstName = document.getElementById('firstName').value.trim();
+  const lastName = document.getElementById('lastName').value.trim();
+  const gender = document.getElementById('gender').value;
 
-  if (!email || !code) {
-    setPanelMessage('Enter email and authentication code.', true);
-    return;
+  if (!firstName || !lastName) {
+    throw new Error('Please enter your first and last name');
   }
 
-  setPanelMessage('Verifying your email...', false);
+  const res = await apiRequest('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      password,
+      first_name: firstName,
+      last_name: lastName,
+      gender: gender || 'other'
+    })
+  });
 
-  try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/verify-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ email, code }),
-    });
-
-    const payload = await res.json();
-    if (!res.ok) {
-      throw new Error(payload.detail || 'Verification failed');
-    }
-
-    applyAuthPayload(payload);
-    setPanelMessage('Account created and verified successfully.', false);
-    switchAuthTab('signin');
-  } catch (error) {
-    // Clear only the code field to allow quick retry
-    const codeInput = document.getElementById('signupCode');
-    if (codeInput) {
-      codeInput.value = '';
-      codeInput.focus();
-    }
-    setPanelMessage(`❌ ${error.message}. Please check your code and try again.`, true);
-  }
-}
-
-async function resendVerificationCode() {
-  const email = (document.getElementById('signupEmail')?.value || appState.signupEmail || '').trim();
-  if (!email) {
-    setPanelMessage('Enter your email first.', true);
-    return;
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'Registration failed. Please try again.');
   }
 
-  // Check if timer is still active
-  if (appState.otpResendTimer > 0) {
-    setPanelMessage(`Please wait ${appState.otpResendTimer}s before resending.`, true);
-    return;
-  }
-
-  try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/resend-code`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ email }),
-    });
-
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.detail || 'Could not resend code');
-
-    setPanelMessage('Verification code resent.', false);
-    
-    // Restart OTP resend cooldown timer
-    startOtpResendTimer(60);
-  } catch (error) {
-    setPanelMessage(`Could not resend: ${error.message}`, true);
-  }
-}
-
-async function handleGoogleCredential(response) {
-  if (!response?.credential) {
-    setPanelMessage('Google authentication failed. Try again.', true);
-    return;
-  }
-
-  setPanelMessage('Verifying Google account...', false);
-
-  try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/google`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        credential: response.credential,
-        mode: appState.pendingAuthMode,
-      }),
-    });
-
-    const payload = await res.json();
-    if (!res.ok) {
-      throw new Error(payload.detail || 'Google sign in failed');
-    }
-
-    applyAuthPayload(payload);
-    setPanelMessage('Signed in with Google.', false);
-  } catch (error) {
-    setPanelMessage(`Google sign in failed: ${error.message}`, true);
-  }
-}
-
-async function loadProfile() {
-  if (!appState.authToken) return false;
-
-  try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/profile`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${appState.authToken}`,
-      },
-    });
-
-    if (!res.ok) return false;
-
-    appState.user = await res.json();
-    fillProfileForm(appState.user);
-    updateAuthUi();
-    return true;
-  } catch (error) {
-    console.error('Failed to load profile', error);
-    return false;
-  }
-}
-
-function fillProfileForm(user) {
-  const data = user || {};
-  const preview = document.getElementById('profileAvatarPreview');
-
-  const set = (id, value) => {
-    const el = document.getElementById(id);
-    if (el) el.value = value || '';
-  };
-
-  set('profileEmail', data.email);
-  set('profileFirstName', data.first_name);
-  set('profileLastName', data.last_name);
-  set('profileGender', data.gender);
-  set('profileAvatarUrl', data.avatar_url);
-  set('profileBio', data.bio);
-
-  if (preview) {
-    preview.src = data.avatar_url || fallbackAvatar(data.name || data.email || 'User');
-  }
-
-  // Also fill the profile dropdown form
-  fillProfileDropdownForm(data);
-}
-
-function fillProfileDropdownForm(user) {
-  const data = user || {};
-  const dropdownAvatar = document.getElementById('dropdownProfileAvatar');
-
-  const set = (id, value) => {
-    const el = document.getElementById(id);
-    if (el) el.value = value || '';
-  };
-
-  set('dropdownProfileEmail', data.email);
-  set('dropdownProfileName', data.first_name && data.last_name ? `${data.first_name} ${data.last_name}` : '');
-  set('dropdownProfileGender', data.gender);
-  set('dropdownProfileAvatarUrl', data.avatar_url);
-  set('dropdownProfileMobile', data.mobile || '');
-  set('dropdownProfileBio', data.bio);
-
-  if (dropdownAvatar) {
-    dropdownAvatar.src = data.avatar_url || fallbackAvatar(data.name || data.email || 'User');
-  }
-}
-
-async function saveProfile() {
-  if (!appState.authToken) {
-    setProfileMessage('Please sign in first.', true);
-    return;
-  }
-
-  const firstName = (document.getElementById('profileFirstName')?.value || '').trim();
-  const lastName = (document.getElementById('profileLastName')?.value || '').trim();
-  const gender = (document.getElementById('profileGender')?.value || '').trim();
-  const avatarUrl = (document.getElementById('profileAvatarUrl')?.value || '').trim();
-  const bio = (document.getElementById('profileBio')?.value || '').trim();
-
-  try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/profile`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${appState.authToken}`,
-      },
-      body: JSON.stringify({
-        first_name: firstName,
-        last_name: lastName,
-        gender,
-        avatar_url: avatarUrl,
-        bio,
-      }),
-    });
-
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.detail || 'Profile update failed');
-
-    appState.user = payload;
-    fillProfileForm(payload);
-    updateAuthUi();
-    setProfileMessage('Profile saved successfully.', false);
-  } catch (error) {
-    setProfileMessage(`Could not save profile: ${error.message}`, true);
-  }
-}
-
-async function saveProfileFromDropdown() {
-  if (!appState.authToken) {
-    setProfileDropdownMessage('Please sign in first.', true);
-    return;
-  }
-
-  const fullName = (document.getElementById('dropdownProfileName')?.value || '').trim();
-  const gender = (document.getElementById('dropdownProfileGender')?.value || '').trim();
-  const avatarUrl = (document.getElementById('dropdownProfileAvatarUrl')?.value || '').trim();
-  const mobile = (document.getElementById('dropdownProfileMobile')?.value || '').trim();
-  const bio = (document.getElementById('dropdownProfileBio')?.value || '').trim();
-
-  // Parse full name into first and last name
-  const nameParts = fullName.split(' ').filter(p => p.length > 0);
-  const firstName = nameParts[0] || '';
-  const lastName = nameParts.slice(1).join(' ') || '';
-
-  setProfileDropdownMessage('Saving...', false);
-
-  try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/profile`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${appState.authToken}`,
-      },
-      body: JSON.stringify({
-        first_name: firstName,
-        last_name: lastName,
-        gender,
-        avatar_url: avatarUrl,
-        bio,
-      }),
-    });
-
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.detail || 'Profile update failed');
-
-    appState.user = payload;
-    fillProfileForm(payload);
-    updateAuthUi();
-    setProfileDropdownMessage('Changes saved successfully.', false);
-    
-    // Close dropdown after short delay
-    setTimeout(() => {
-      document.getElementById('profileDropdown')?.classList.add('hidden');
-    }, 1500);
-  } catch (error) {
-    setProfileDropdownMessage(`Could not save: ${error.message}`, true);
-  }
-}
-
-function setProfileMessage(text, isError) {
-  const el = document.getElementById('profileMessage');
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = isError ? '#aa2f2f' : '#1d9a65';
-}
-
-function setProfileDropdownMessage(text, isError) {
-  const el = document.getElementById('profileDropdownMessage');
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = isError ? '#aa2f2f' : '#1d9a65';
-}
-
-function applyAuthPayload(payload) {
-  appState.authToken = payload.access_token;
-  appState.user = payload.user;
-
-  localStorage.setItem('auth_token', payload.access_token);
-  fillProfileForm(payload.user);
-  updateAuthUi();
-
-  document.getElementById('authPanel')?.classList.remove('open');
-}
-
-function updateAuthUi() {
-  const signedIn = Boolean(appState.authToken && appState.user);
-
-  const userChip = document.getElementById('userChip');
-  const userChipText = document.getElementById('userChipText');
-  const userChipAvatar = document.getElementById('userChipAvatar');
-  const signOutQuickBtn = document.getElementById('signOutQuickBtn');
-  const authToggleBtn = document.getElementById('authToggleBtn');
-  const profileSection = document.getElementById('profileSection');
-  const profileLocked = document.getElementById('profileLocked');
-  const profileDropdown = document.getElementById('profileDropdown');
-  const uploadArticle = document.getElementById('uploadArticle');
-
-  // Show userChip (avatar) only when signed in
-  userChip.style.display = signedIn ? 'flex' : 'none';
-  // Hide all sign in/account buttons when signed in - they should only be in the dropdown
-  signOutQuickBtn.classList.toggle('hidden', true);
-  authToggleBtn.style.display = signedIn ? 'none' : 'block';
-
-  if (signedIn) {
-    const displayName = appState.user.first_name && appState.user.last_name
-      ? `${appState.user.first_name} ${appState.user.last_name}`
-      : appState.user.first_name || appState.user.email;
-    userChipText.textContent = displayName;
-    userChipAvatar.src = appState.user.avatar_url || fallbackAvatar(displayName);
-
-    if (profileSection) {
-      profileSection.classList.remove('hidden');
-    }
-    if (profileLocked) {
-      profileLocked.classList.add('hidden');
-    }
-    
-    // Show upload section only to signed-in users
-    if (uploadArticle) uploadArticle.style.display = 'block';
+  const data = await res.json();
+  
+  if (data.access_token) {
+    saveSession(data.access_token, data.user || { email, first_name: firstName });
+    closeAuth();
+    showDashboard();
+    showToast('Account created successfully!', 'success');
   } else {
-    if (profileSection) {
-      profileSection.classList.add('hidden');
-    }
-    if (profileLocked) {
-      profileLocked.classList.remove('hidden');
-    }
-    if (profileDropdown) profileDropdown.classList.add('hidden');
-    
-    // Hide upload section when not signed in
-    if (uploadArticle) uploadArticle.style.display = 'none';
-  }
-
-  const isAdmin = Boolean(appState.user && appState.user.is_admin);
-
-  const adminPanel = document.getElementById('adminPanel');
-  adminPanel.style.display = isAdmin ? 'block' : 'none';
-  if (isAdmin) {
-    loadAdminUsers();
-    testBackendConnectivity();
+    // Email verification needed
+    showAuthSuccess('Verification code sent to your email. Check your inbox.');
+    document.getElementById('verificationFields').style.display = 'block';
+    document.getElementById('authBtnText').textContent = 'Verify & Sign In';
+    state.currentTab = 'verify';
   }
 }
 
-function signOut() {
+async function signInWithGoogle() {
+  if (window.google) {
+    window.google.accounts.id.prompt();
+  } else {
+    showToast('Google Sign-In is not available', 'error');
+  }
+}
+
+async function handleGoogleResponse(response) {
+  if (!response.credential) return;
+
+  setAuthLoading(true);
+  try {
+    const res = await apiRequest('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ token: response.credential })
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || 'Google sign-in failed');
+    }
+
+    const data = await res.json();
+    saveSession(data.access_token, data.user || {});
+    closeAuth();
+    showDashboard();
+    showToast('Signed in with Google!', 'success');
+  } catch (err) {
+    showAuthError(err.message);
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+function logout() {
   clearSession();
-  setPanelMessage('Signed out.', false);
+  showLanding();
+  showToast('Signed out successfully', 'success');
+}
+
+// ==================== SESSION MANAGEMENT ====================
+function saveSession(token, user) {
+  state.token = token;
+  state.user = user;
+  localStorage.setItem('auth_token', token);
+  localStorage.setItem('auth_user', JSON.stringify(user));
 }
 
 function clearSession() {
-  appState.authToken = null;
-  appState.user = null;
+  state.token = null;
+  state.user = null;
+  state.presentations = [];
   localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_user');
+}
 
-  fillProfileForm({
-    email: '',
-    first_name: '',
-    last_name: '',
-    gender: '',
-    avatar_url: '',
-    bio: '',
-  });
+// ==================== VIEW MANAGEMENT ====================
+function showDashboard() {
+  document.getElementById('landing').classList.add('hidden');
+  document.getElementById('dashboard').classList.add('active');
+  
+  // Update nav
+  document.getElementById('navLinks').style.display = 'none';
+  document.getElementById('navActions').innerHTML = `
+    <span style="font-size:13px;color:var(--text-secondary);">${state.user?.email || ''}</span>
+    <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+  `;
 
-  const adminBody = document.getElementById('adminUsersBody');
-  if (adminBody) {
-    adminBody.innerHTML = '<tr><td colspan="5" class="small">No users loaded yet.</td></tr>';
+  // Update welcome
+  const name = state.user?.first_name || state.user?.email?.split('@')[0] || 'User';
+  document.getElementById('userName').textContent = name;
+
+  // Load presentations
+  loadPresentations();
+}
+
+function showLanding() {
+  document.getElementById('landing').classList.remove('hidden');
+  document.getElementById('dashboard').classList.remove('active');
+  document.getElementById('navLinks').style.display = '';
+  document.getElementById('navActions').innerHTML = `
+    <button class="btn btn-ghost" onclick="openAuth('signin')">Log In</button>
+    <button class="btn btn-primary" onclick="openAuth('signup')">Get Started Free</button>
+  `;
+}
+
+// ==================== FILE UPLOAD ====================
+async function handleFileUpload(file) {
+  const validTypes = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  const validExts = ['pdf', 'pptx', 'docx'];
+
+  if (!validExts.includes(ext) && !validTypes.includes(file.type)) {
+    showToast('Please upload a PDF, PPTX, or DOCX file', 'error');
+    return;
   }
 
-  updateAuthUi();
-}
-
-function setPanelMessage(text, isError) {
-  const msg = document.getElementById('panelAuthMessage');
-  if (!msg) return;
-  msg.style.display = 'block';
-  msg.textContent = text;
-  msg.classList.toggle('error', Boolean(isError));
-}
-
-async function loadAdminUsers() {
-  if (!appState.authToken || !appState.user?.is_admin) return;
-
-  const body = document.getElementById('adminUsersBody');
-  const stats = document.getElementById('adminStats');
-
-  try {
-    body.innerHTML = '<tr><td colspan="5" class="small">Loading users...</td></tr>';
-
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/admin/users`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${appState.authToken}`,
-      },
-    });
-
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.detail || 'Could not load users');
-
-    stats.innerHTML = `
-      <span class="tag">Total: ${payload.total}</span>
-      <span class="tag">Verified: ${payload.verified}</span>
-      <span class="tag">Admins: ${payload.admins}</span>
-    `;
-
-    if (!payload.items?.length) {
-      body.innerHTML = '<tr><td colspan="5" class="small">No users available.</td></tr>';
-      return;
-    }
-
-    body.innerHTML = payload.items
-      .map((user) => {
-        const verifiedChip = user.is_verified ? '<span class="chip ok">Verified</span>' : '<span class="chip warn">Pending</span>';
-        const activeChip = user.is_active ? '<span class="chip ok">Active</span>' : '<span class="chip bad">Disabled</span>';
-        const adminChip = user.is_admin ? '<span class="chip ok">Admin</span>' : '<span class="chip">User</span>';
-
-        return `
-          <tr>
-            <td>
-              <strong>${escapeHtml(user.name || user.email)}</strong><br />
-              <span class="small">${escapeHtml(user.email)}</span>
-            </td>
-            <td>${verifiedChip}${activeChip}${adminChip}</td>
-            <td>${escapeHtml(user.login_provider || 'email')}</td>
-            <td>${formatDate(user.created_at)}</td>
-            <td>
-              <button class="btn btn-soft" onclick="toggleAdmin(${user.id})" style="padding:0.38rem 0.55rem; font-size:0.78rem;">
-                ${user.is_admin ? 'Revoke admin' : 'Make admin'}
-              </button>
-              <button class="btn btn-soft" onclick="toggleActive(${user.id})" style="padding:0.38rem 0.55rem; font-size:0.78rem; margin-top:0.3rem;">
-                ${user.is_active ? 'Disable' : 'Enable'}
-              </button>
-            </td>
-          </tr>
-        `;
-      })
-      .join('');
-  } catch (error) {
-    body.innerHTML = `<tr><td colspan="5" class="small">${escapeHtml(error.message)}</td></tr>`;
+  if (file.size > 50 * 1024 * 1024) {
+    showToast('File size exceeds 50MB limit', 'error');
+    return;
   }
-}
 
-function toggleAdmin(userId) {
-  adminAction('toggle-admin', userId);
-}
+  const progress = document.getElementById('uploadProgress');
+  const progressFill = document.getElementById('progressFill');
+  const uploadStatus = document.getElementById('uploadStatus');
 
-function toggleActive(userId) {
-  adminAction('toggle-active', userId);
-}
+  progress.classList.add('active');
+  progressFill.style.width = '0%';
+  uploadStatus.textContent = 'Uploading...';
 
-async function adminAction(path, userId) {
-  if (!appState.authToken || !appState.user?.is_admin) return;
+  // Simulate progress
+  let pct = 0;
+  const interval = setInterval(() => {
+    pct = Math.min(pct + Math.random() * 15, 90);
+    progressFill.style.width = pct + '%';
+  }, 200);
+
+  const formData = new FormData();
+  formData.append('file', file);
 
   try {
-    const res = await fetchWithTimeout(`${CONFIG.backendUrl}/auth/admin/users/${userId}/${path}`, {
+    const res = await fetch(`${API_BASE}/presentations/upload`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${appState.authToken}`,
+        'Authorization': `Bearer ${state.token}`
       },
+      body: formData
     });
 
+    clearInterval(interval);
+
     if (!res.ok) {
-      const payload = await res.json();
-      throw new Error(payload.detail || 'Action failed');
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || 'Upload failed');
     }
 
-    await loadAdminUsers();
+    progressFill.style.width = '100%';
+    uploadStatus.textContent = 'Upload complete!';
+    showToast(`"${file.name}" uploaded successfully!`, 'success');
 
-    const updatedUser = await res.json();
-    if (updatedUser.id === appState.user.id) {
-      appState.user = updatedUser;
-      updateAuthUi();
-    }
-  } catch (error) {
-    alert(`Error: ${error.message}`);
+    setTimeout(() => {
+      progress.classList.remove('active');
+      progressFill.style.width = '0%';
+    }, 2000);
+
+    loadPresentations();
+  } catch (err) {
+    clearInterval(interval);
+    progress.classList.remove('active');
+    showToast(err.message || 'Upload failed', 'error');
   }
 }
 
-function escapeHtml(text) {
-  if (!text) return '';
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
-}
-
-function formatDate(isoString) {
-  if (!isoString) return 'N/A';
-  try {
-    return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return 'Invalid';
-  }
-}
-
-async function testBackendConnectivity() {
-  const indicator = document.getElementById('backendStatusIndicator');
-  const statusText = document.getElementById('backendStatusText');
-  const statusDetail = document.getElementById('backendStatusDetail');
-
-  if (!indicator || !statusText) return;
+// ==================== PRESENTATIONS ====================
+async function loadPresentations() {
+  if (!state.token) return;
 
   try {
-    indicator.classList.remove('ok', 'error');
-    indicator.classList.add('loading');
-    statusText.textContent = 'Checking...';
-
-    const res = await Promise.race([
-      fetch(`${CONFIG.backendUrl}/health`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        mode: 'cors',
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000)),
-    ]);
+    const res = await apiRequest('/presentations/', {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
 
     if (res.ok) {
       const data = await res.json();
-      indicator.classList.add('ok');
-      statusText.textContent = '🟢 Connected';
-      if (statusDetail) statusDetail.textContent = `v${data.version || 'unknown'}`;
-      appState.backendConnected = true;
-    } else {
-      throw new Error(`HTTP ${res.status}`);
+      state.presentations = Array.isArray(data) ? data : (data.presentations || []);
+      renderPresentations();
     }
-  } catch (error) {
-    indicator.classList.add('error');
-    statusText.textContent = '🔴 Disconnected';
-    if (statusDetail) statusDetail.textContent = error.message;
-    appState.backendConnected = false;
+  } catch {
+    // Silent fail - presentations list is optional
   }
 }
 
-function setPanelMessage(text, isError) {
-  const el = document.getElementById('panelMessage');
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = isError ? '#aa2f2f' : '#1d9a65';
-}
+function renderPresentations() {
+  const container = document.getElementById('presentationsList');
+  if (!container) return;
 
-function fallbackAvatar(name) {
-  const url = new URL('https://api.dicebear.com/8.x/initials/svg');
-  url.searchParams.append('seed', (name || 'User').trim());
-  url.searchParams.append('backgroundColor', '6c5ce7');
-  url.searchParams.append('textColor', 'ffffff');
-  return url.toString();
-}
-
-function displayConfiguration() {
-  if (CONFIG.backendUrl) {
-    const el = document.getElementById('configDisplay');
-    if (el) el.textContent = CONFIG.backendUrl;
-  }
-}
-
-function fetchWithTimeout(url, options = {}, timeout = 10000) {
-  return Promise.race([
-    fetch(url, {
-      ...options,
-      mode: 'cors',
-      credentials: 'include',
-    }),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout)),
-  ]);
-}
-
-window.appState = appState;
-window.toggleAdmin = toggleAdmin;
-window.toggleActive = toggleActive;
-
-function displayConfiguration() {
-  const backendUrl = document.getElementById('backendUrl');
-  if (backendUrl) {
-    backendUrl.textContent = CONFIG.backendUrl || 'Not configured';
-  }
-}
-
-// Admin-only features are hidden by default and only shown when user.is_admin=true
-async function testBackendConnectivity() {
-  if (!appState.user?.is_admin) {
+  if (!state.presentations.length) {
+    container.innerHTML = '';
     return;
   }
 
-  const statusText = document.getElementById('statusText');
-  const dot = document.getElementById('statusDot');
-  const backendStatusText = document.getElementById('backendStatusText');
-  const healthStatus = document.getElementById('healthStatus');
-  const infoStatus = document.getElementById('infoStatus');
-
-  if (!CONFIG.backendUrl) {
-    statusText.textContent = 'Not configured';
-    backendStatusText.textContent = 'Not configured';
-    healthStatus.textContent = 'Not configured';
-    infoStatus.textContent = 'Not configured';
-    dot.classList.remove('ok');
-    return;
-  }
-
-  try {
-    backendStatusText.textContent = 'Checking...';
-
-    const healthRes = await fetchWithTimeout(`${CONFIG.backendUrl}/health`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-
-    const infoRes = await fetchWithTimeout(`${CONFIG.backendUrl}/`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-
-    const ok = healthRes.ok && infoRes.ok;
-    appState.backendConnected = ok;
-
-    statusText.textContent = ok ? 'Connected' : 'Degraded';
-    backendStatusText.textContent = ok ? 'Connected' : 'Issue detected';
-    healthStatus.textContent = healthRes.ok ? 'OK' : `Error ${healthRes.status}`;
-    infoStatus.textContent = infoRes.ok ? 'OK' : `Error ${infoRes.status}`;
-    dot.classList.toggle('ok', ok);
-  } catch (error) {
-    appState.backendConnected = false;
-    statusText.textContent = 'Disconnected';
-    backendStatusText.textContent = 'Disconnected';
-    healthStatus.textContent = 'Failed';
-    infoStatus.textContent = 'Failed';
-    dot.classList.remove('ok');
-  }
-}
-
-function fallbackAvatar(seedText) {
-  const seed = encodeURIComponent(seedText || 'User');
-  return `https://api.dicebear.com/8.x/initials/svg?seed=${seed}`;
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString();
-}
-
-function fetchWithTimeout(url, options = {}, timeout = 10000) {
-  return Promise.race([
-    fetch(url, {
-      ...options,
-      mode: 'cors',
-      credentials: 'include',
-    }),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout)),
-  ]);
-}
-
-async function handleDocumentUpload(file) {
-  const uploadArea = document.getElementById('uploadArea');
-  const uploadProgress = document.getElementById('uploadProgress');
-  const uploadSuccess = document.getElementById('uploadSuccess');
-  const uploadError = document.getElementById('uploadError');
-  const uploadFileName = document.getElementById('uploadFileName');
-  const uploadBar = document.getElementById('uploadBar');
-  const errorMessage = document.getElementById('errorMessage');
-
-  // Reset messages
-  uploadSuccess.classList.add('hidden');
-  uploadError.classList.add('hidden');
-
-  // Validate file type
-  const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-  if (!allowedTypes.includes(file.type)) {
-    errorMessage.textContent = '❌ Invalid file type. Please upload PDF, PPTX, or DOCX.';
-    uploadError.classList.remove('hidden');
-    return;
-  }
-
-  // Validate file size (max 50MB)
-  const maxSize = 50 * 1024 * 1024;
-  if (file.size > maxSize) {
-    errorMessage.textContent = '❌ File too large. Maximum size is 50MB.';
-    uploadError.classList.remove('hidden');
-    return;
-  }
-
-  // Check if user is authenticated
-  if (!appState.authToken) {
-    errorMessage.textContent = '❌ Please sign in first to upload documents.';
-    uploadError.classList.remove('hidden');
-    return;
-  }
-
-  // Show progress
-  uploadProgress.classList.remove('hidden');
-  uploadFileName.textContent = `Uploading: ${file.name}`;
-  uploadBar.style.width = '0%';
-
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    // Simulate upload progress
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-      progress += Math.random() * 30;
-      if (progress > 90) progress = 90;
-      uploadBar.style.width = progress + '%';
-    }, 300);
-
-    const response = await fetch(`${CONFIG.backendUrl}/presentations/upload`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${appState.authToken}`,
-      },
-      body: formData,
-      mode: 'cors',
-    });
-
-    clearInterval(progressInterval);
-    uploadBar.style.width = '100%';
-
-    if (response.ok) {
-      const data = await response.json();
-      uploadProgress.classList.add('hidden');
-      uploadSuccess.classList.remove('hidden');
-      
-      // Clear file input
-      document.getElementById('documentUpload').value = '';
-      
-      // Store the uploaded filename
-      appState.currentPresentation = data.filename;
-      
-      // Hide upload area and show avatar/voice selection
-      setTimeout(() => {
-        uploadSection.style.opacity = '0.7';
-        uploadSection.style.pointerEvents = 'none';
-        
-        // Load and show avatar selection
-        loadAvatarsForSelection();
-        loadVoicesForSelection();
-      }, 2000);
-    } else {
-      const error = await response.text();
-      errorMessage.textContent = '❌ Upload failed: ' + (error || 'Please try again');
-      uploadProgress.classList.add('hidden');
-      uploadError.classList.remove('hidden');
-    }
-  } catch (error) {
-    uploadProgress.classList.add('hidden');
-    errorMessage.textContent = '❌ Upload error: ' + error.message;
-    uploadError.classList.remove('hidden');
-  }
-}
-
-function startOtpResendTimer(seconds) {
-  appState.otpResendTimer = seconds;
-  const resendBtn = document.getElementById('resendCodeBtn');
-  const timerMsg = document.getElementById('resendTimerMsg');
-  const timerCount = document.getElementById('timerCount');
-
-  // Show timer message and disable only the resend button
-  if (timerMsg) timerMsg.style.display = 'block';
-  if (resendBtn) resendBtn.disabled = true;
-  // NOTE: verifyAccountBtn stays enabled so user can retry code entry
-
-  // Clear any existing interval
-  if (appState.otpResendInterval) {
-    clearInterval(appState.otpResendInterval);
-  }
-
-  // Update timer every second
-  appState.otpResendInterval = setInterval(() => {
-    appState.otpResendTimer--;
-    if (timerCount) timerCount.textContent = appState.otpResendTimer;
-
-    if (appState.otpResendTimer <= 0) {
-      clearInterval(appState.otpResendInterval);
-      appState.otpResendInterval = null;
-      
-      // Hide timer message and enable resend button
-      if (timerMsg) timerMsg.style.display = 'none';
-      if (resendBtn) {
-        resendBtn.disabled = false;
-        resendBtn.textContent = 'Resend code';
-      }
-    } else {
-      // Update resend button text to show time remaining
-      if (resendBtn) {
-        resendBtn.textContent = `Resend code (${appState.otpResendTimer}s)`;
-      }
-    }
-  }, 1000);
-}
-
-async function loadAvatarsForSelection() {
-  try {
-    const response = await fetch(`${CONFIG.backendUrl}/avatars`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${appState.authToken}`,
-      },
-      mode: 'cors',
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      appState.avatars = data.avatars;
-      showAvatarSelection(data.avatars);
-    } else {
-      console.error('Failed to load avatars');
-    }
-  } catch (error) {
-    console.error('Error loading avatars:', error);
-  }
-}
-
-async function loadVoicesForSelection() {
-  try {
-    const response = await fetch(`${CONFIG.backendUrl}/voices`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${appState.authToken}`,
-      },
-      mode: 'cors',
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      appState.voices = data.voices;
-      showVoiceSelection(data.voices);
-    } else {
-      console.error('Failed to load voices');
-    }
-  } catch (error) {
-    console.error('Error loading voices:', error);
-  }
-}
-
-function showAvatarSelection(avatars) {
-  const uploadArticle = document.getElementById('uploadArticle');
-  if (!uploadArticle) return;
-
-  // Create avatar selection panel
-  let avatarPanel = document.getElementById('avatarSelectionPanel');
-  if (!avatarPanel) {
-    avatarPanel = document.createElement('div');
-    avatarPanel.id = 'avatarSelectionPanel';
-    avatarPanel.style.cssText = 'margin-top: 2rem; padding: 1.5rem; background: #f5f5f5; border-radius: 8px;';
-    uploadArticle.appendChild(avatarPanel);
-  }
-
-  let avatarHTML = '<h3 style="margin-top: 0; margin-bottom: 1rem;">👤 Select Your Avatar</h3>';
-  avatarHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">';
-  
-  avatars.forEach(avatar => {
-    avatarHTML += `
-      <div style="padding: 1rem; background: white; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease;" 
-           onmouseover="this.style.borderColor='#0e6ba8'; this.style.boxShadow='0 4px 12px rgba(14, 107, 168, 0.2)';"
-           onmouseout="this.style.borderColor='#ddd'; this.style.boxShadow='';"
-           onclick="selectAvatar('${avatar.id}', '${avatar.name.replace(/'/g, "\\'")}')">
-        <div style="font-size: 2.5rem; text-align: center; margin-bottom: 0.5rem;">🎭</div>
-        <p style="font-weight: 600; margin: 0.5rem 0; font-size: 0.9rem; color: #153a55;">${avatar.name}</p>
-        <p style="font-size: 0.8rem; color: #666; margin: 0;">${avatar.description}</p>
+  const html = `
+    <h3 class="dash-section-title" style="margin-top:48px;">Your Presentations</h3>
+    ${state.presentations.map(p => `
+      <div class="presentation-item">
+        <div class="presentation-info">
+          <span class="presentation-icon">📄</span>
+          <div class="presentation-meta">
+            <h4>${escapeHtml(p.filename || p.title || 'Untitled')}</h4>
+            <span>${formatDate(p.created_at || p.uploaded_at)} • ${p.file_type || 'Document'}</span>
+          </div>
+        </div>
+        <div class="presentation-actions">
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="deletePresentation('${p.id}')">Delete</button>
+        </div>
       </div>
-    `;
-  });
-  
-  avatarHTML += '</div>';
-  avatarPanel.innerHTML = avatarHTML;
+    `).join('')}
+  `;
+
+  container.innerHTML = html;
 }
 
-function showVoiceSelection(voices) {
-  const uploadArticle = document.getElementById('uploadArticle');
-  if (!uploadArticle) return;
+async function deletePresentation(id) {
+  if (!confirm('Delete this presentation?')) return;
 
-  // Create voice selection panel
-  let voicePanel = document.getElementById('voiceSelectionPanel');
-  if (!voicePanel) {
-    voicePanel = document.createElement('div');
-    voicePanel.id = 'voiceSelectionPanel';
-    voicePanel.style.cssText = 'margin-top: 2rem; padding: 1.5rem; background: #f5f5f5; border-radius: 8px;';
-    uploadArticle.appendChild(voicePanel);
-  }
-
-  let voiceHTML = '<h3 style="margin-top: 0; margin-bottom: 1rem;">🎙️ Select Your Voice</h3>';
-  voiceHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">';
-  
-  voices.forEach(voice => {
-    voiceHTML += `
-      <div style="padding: 1rem; background: white; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease;" 
-           onmouseover="this.style.borderColor='#1b9aaa'; this.style.boxShadow='0 4px 12px rgba(27, 154, 170, 0.2)';"
-           onmouseout="this.style.borderColor='#ddd'; this.style.boxShadow='';"
-           onclick="selectVoice('${voice.id}', '${voice.name.replace(/'/g, "\\'")}')">
-        <div style="font-size: 2.5rem; text-align: center; margin-bottom: 0.5rem;">🎵</div>
-        <p style="font-weight: 600; margin: 0.5rem 0; font-size: 0.9rem; color: #153a55;">${voice.name}</p>
-        <p style="font-size: 0.8rem; color: #666; margin: 0;">${voice.description}</p>
-        <p style="font-size: 0.75rem; color: #999; margin: 0.5rem 0 0 0;">${voice.language}</p>
-      </div>
-    `;
-  });
-  
-  voiceHTML += '</div>';
-  voicePanel.innerHTML = voiceHTML;
-}
-
-async function selectAvatar(avatarId, avatarName) {
   try {
-    const response = await fetch(`${CONFIG.backendUrl}/avatars/select?avatar_id=${avatarId}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${appState.authToken}`,
-      },
-      mode: 'cors',
+    const res = await apiRequest(`/presentations/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${state.token}` }
     });
 
-    if (response.ok) {
-      appState.selectedAvatar = avatarId;
-      console.log('Avatar selected:', avatarName);
-      
-      // Highlight selected avatar
-      const avatarPanel = document.getElementById('avatarSelectionPanel');
-      if (avatarPanel) {
-        const divs = avatarPanel.querySelectorAll('div[onclick*="selectAvatar"]');
-        divs.forEach(div => {
-          if (div.getAttribute('onclick').includes(avatarId)) {
-            div.style.borderColor = '#0e6ba8';
-            div.style.background = '#f0f5ff';
-          } else {
-            div.style.borderColor = '#ddd';
-            div.style.background = 'white';
-          }
-        });
-      }
+    if (res.ok) {
+      showToast('Presentation deleted', 'success');
+      loadPresentations();
+    } else {
+      showToast('Failed to delete', 'error');
     }
-  } catch (error) {
-    console.error('Error selecting avatar:', error);
+  } catch {
+    showToast('Failed to delete', 'error');
   }
 }
 
-async function selectVoice(voiceId, voiceName) {
+// ==================== API HELPER ====================
+async function apiRequest(path, options = {}) {
+  const url = `${API_BASE}${path}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers
+  };
+
+  if (state.token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${state.token}`;
+  }
+
+  // Don't set Content-Type for FormData
+  if (options.body instanceof FormData) {
+    delete headers['Content-Type'];
+  }
+
+  return fetch(url, { ...options, headers });
+}
+
+// ==================== UI HELPERS ====================
+function setAuthLoading(loading) {
+  state.isLoading = loading;
+  const btn = document.getElementById('authSubmitBtn');
+  const spinner = document.getElementById('authSpinner');
+  const text = document.getElementById('authBtnText');
+  
+  if (loading) {
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    spinner.classList.add('active');
+    text.style.opacity = '0.5';
+  } else {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    spinner.classList.remove('active');
+    text.style.opacity = '1';
+  }
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function showAuthSuccess(msg) {
+  const el = document.getElementById('authSuccess');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function hideAuthMessages() {
+  document.getElementById('authError').classList.remove('show');
+  document.getElementById('authSuccess').classList.remove('show');
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast ${type} show`;
+  setTimeout(() => { toast.classList.remove('show'); }, 4000);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return 'Just now';
   try {
-    const response = await fetch(`${CONFIG.backendUrl}/voices/select?voice_id=${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${appState.authToken}`,
-      },
-      mode: 'cors',
-    });
-
-    if (response.ok) {
-      appState.selectedVoice = voiceId;
-      console.log('Voice selected:', voiceName);
-      
-      // Highlight selected voice
-      const voicePanel = document.getElementById('voiceSelectionPanel');
-      if (voicePanel) {
-        const divs = voicePanel.querySelectorAll('div[onclick*="selectVoice"]');
-        divs.forEach(div => {
-          if (div.getAttribute('onclick').includes(voiceId)) {
-            div.style.borderColor = '#1b9aaa';
-            div.style.background = '#f0f7f8';
-          } else {
-            div.style.borderColor = '#ddd';
-            div.style.background = 'white';
-          }
-        });
-      }
-    }
-  } catch (error) {
-    console.error('Error selecting voice:', error);
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return 'Recently';
   }
 }
 
-window.appState = appState;
-window.toggleAdmin = toggleAdmin;
-window.toggleActive = toggleActive;
+// Close modal on overlay click
+document.addEventListener('click', (e) => {
+  if (e.target.id === 'authModal') closeAuth();
+});
+
+// Close modal on Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAuth();
+});
