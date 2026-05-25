@@ -251,7 +251,7 @@ async function handleGoogleResponse(response) {
   try {
     const res = await apiRequest('/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ token: response.credential })
+      body: JSON.stringify({ credential: response.credential })
     });
 
     if (!res.ok) {
