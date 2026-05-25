@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - AI Presentation Avatar</title>
+  <style>
+    :root {
+      --brand: #6c5ce7;
+      --brand-2: #00b4d8;
+      --bg-primary: #0f1419;
+      --bg-secondary: #1a1f2e;
+      --text-primary: #e8e8e8;
+      --text-secondary: #a0a0a0;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --line: rgba(255, 255, 255, 0.1);
+      --ok: #27ae60;
+      --bad: #e74c3c;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+    }
+
+    body {
+      font-family: "Segoe UI", "Noto Sans", "Trebuchet MS", sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    a {
+      color: var(--brand);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* Header Styles */
+    header.app-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      backdrop-filter: blur(10px);
+    }
+
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 76px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      color: var(--brand);
+      font-size: 1.25rem;
+      cursor: pointer;
+    }
+
+    .logo:hover {
+      color: var(--brand-2);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: relative;
+    }
+
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: transparent;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .user-chip:hover {
+      background: rgba(108, 92, 231, 0.1);
+      border-color: rgba(108, 92, 231, 0.3);
+    }
+
+    .user-chip img {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      object-fit: cover;
+    }
+
+    .user-menu {
+      position: absolute;
+      top: 70px;
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      min-width: 200px;
+      z-index: 100;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .user-menu.hidden {
+      display: none;
+    }
+
+    .menu-item {
+      display: block;
+      width: 100%;
+      padding: 12px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      text-align: left;
+      cursor: pointer;
+      font-size: 14px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .menu-item:hover {
+      background: rgba(108, 92, 231, 0.1);
+      color: var(--brand);
+    }
+  </style>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="logo-area">
+        <a href="/" class="logo">🎬 AI Presentation Avatar</a>
+      </div>
+      <div class="header-right">
+        <button id="userChip" class="user-chip">
+          <img id="userChipAvatar" src="" alt="Avatar">
+          <span id="userChipText">User</span>
+        </button>
+        <div id="userMenu" class="user-menu hidden">
+          <a href="/settings" class="menu-item">⚙️ Settings</a>
+          <button id="signOutBtn" class="menu-item">🚪 Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Settings Layout -->
+  <div class="settings-container">
+    <!-- Sidebar Navigation -->
+    <aside class="settings-sidebar">
+      <nav class="settings-nav">
+        <button class="nav-item active" data-section="profile">
+          <span class="icon">👤</span>
+          <span>Profile</span>
+        </button>
+        <button class="nav-item" data-section="security">
+          <span class="icon">🔒</span>
+          <span>Security</span>
+        </button>
+        <button class="nav-item" data-section="notifications">
+          <span class="icon">🔔</span>
+          <span>Notifications</span>
+        </button>
+        <button class="nav-item" data-section="billing">
+          <span class="icon">💳</span>
+          <span>Billing & Plan</span>
+        </button>
+        <button class="nav-item" data-section="api">
+          <span class="icon">🔑</span>
+          <span>API Keys</span>
+        </button>
+        <button class="nav-item" data-section="account">
+          <span class="icon">⚠️</span>
+          <span>Account</span>
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="settings-content">
+      <!-- PROFILE SECTION -->
+      <section id="profile-section" class="settings-section active">
+        <div class="section-header">
+          <h2>Profile Settings</h2>
+          <p>Manage your personal information</p>
+        </div>
+
+        <div class="settings-form">
+          <!-- Avatar Upload -->
+          <div class="form-group">
+            <label>Profile Picture</label>
+            <div class="avatar-upload-area">
+              <img id="settingsProfileAvatar" src="" alt="Profile" class="avatar-preview">
+              <div class="upload-controls">
+                <input type="file" id="avatarUpload" accept="image/*" style="display:none">
+                <button type="button" onclick="document.getElementById('avatarUpload').click()" class="btn btn-secondary">
+                  Change Picture
+                </button>
+                <button type="button" class="btn btn-text">Remove</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Name -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="settingsFirstName">First Name</label>
+              <input type="text" id="settingsFirstName" class="form-control" placeholder="John">
+            </div>
+            <div class="form-group">
+              <label for="settingsLastName">Last Name</label>
+              <input type="text" id="settingsLastName" class="form-control" placeholder="Doe">
+            </div>
+          </div>
+
+          <!-- Email -->
+          <div class="form-group">
+            <label for="settingsEmail">Email Address</label>
+            <div class="email-field">
+              <input type="email" id="settingsEmail" class="form-control" disabled>
+              <span class="verified-badge">✓ Verified</span>
+            </div>
+            <small>Change email requires reverification</small>
+          </div>
+
+          <!-- Gender -->
+          <div class="form-group">
+            <label for="settingsGender">Gender</label>
+            <select id="settingsGender" class="form-control">
+              <option value="">Prefer not to say</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Non-binary">Non-binary</option>
+            </select>
+          </div>
+
+          <!-- Bio -->
+          <div class="form-group">
+            <label for="settingsBio">Bio / About</label>
+            <textarea id="settingsBio" class="form-control" rows="4" 
+              placeholder="Tell us about yourself..."></textarea>
+          </div>
+
+          <!-- Mobile -->
+          <div class="form-group">
+            <label for="settingsMobile">Mobile Number</label>
+            <input type="tel" id="settingsMobile" class="form-control" 
+              placeholder="+1 (555) 000-0000">
+          </div>
+
+          <!-- Save Button -->
+          <div class="form-actions">
+            <button id="saveSettingsBtn" class="btn btn-primary">Save Changes</button>
+            <span id="settingsMessage" class="message"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECURITY SECTION -->
+      <section id="security-section" class="settings-section">
+        <div class="section-header">
+          <h2>Security Settings</h2>
+          <p>Protect your account</p>
+        </div>
+
+        <div class="security-items">
+          <!-- Change Password -->
+          <div class="security-item">
+            <div class="item-header">
+              <h3>Password</h3>
+              <p>Last changed 3 months ago</p>
+            </div>
+            <button class="btn btn-secondary" id="changePasswordBtn">
+              Change Password
+            </button>
+          </div>
+
+          <!-- Two-Factor Authentication -->
+          <div class="security-item">
+            <div class="item-header">
+              <h3>Two-Factor Authentication</h3>
+              <p>Add an extra layer of security</p>
+            </div>
+            <div class="item-status">
+              <span class="badge badge-disabled">Disabled</span>
+              <button class="btn btn-primary" id="enable2FABtn">
+                Enable 2FA
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Sessions -->
+          <div class="security-item">
+            <div class="item-header">
+              <h3>Active Sessions</h3>
+              <p>Manage devices signed in to your account</p>
+            </div>
+            <div id="sessions-list" class="sessions-list">
+              <p style="color: #a0a0a0;">No active sessions data available</p>
+            </div>
+          </div>
+
+          <!-- Login History -->
+          <div class="security-item">
+            <div class="item-header">
+              <h3>Login History</h3>
+              <p>Recent account access</p>
+            </div>
+            <button class="btn btn-secondary" id="viewLoginHistoryBtn">
+              View Login History
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- NOTIFICATIONS SECTION -->
+      <section id="notifications-section" class="settings-section">
+        <div class="section-header">
+          <h2>Notification Preferences</h2>
+          <p>Choose how you want to be contacted</p>
+        </div>
+
+        <div class="notification-preferences">
+          <div class="preference-item">
+            <div class="preference-header">
+              <h3>Email Notifications</h3>
+            </div>
+            <label class="checkbox-item">
+              <input type="checkbox" id="emailPresentation" checked>
+              <span>Presentation updates and completion</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="emailAccount" checked>
+              <span>Account changes and security alerts</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="emailPromo">
+              <span>Product updates and promotions</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="emailWeekly">
+              <span>Weekly digest of usage statistics</span>
+            </label>
+          </div>
+
+          <div class="preference-item">
+            <div class="preference-header">
+              <h3>System Notifications</h3>
+            </div>
+            <label class="checkbox-item">
+              <input type="checkbox" id="inAppNotif" checked>
+              <span>Show in-app notifications</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="pushNotif">
+              <span>Browser push notifications</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button id="saveNotifBtn" class="btn btn-primary">Save Preferences</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- BILLING SECTION -->
+      <section id="billing-section" class="settings-section">
+        <div class="section-header">
+          <h2>Billing & Plan</h2>
+          <p>Manage your subscription</p>
+        </div>
+
+        <div class="billing-container">
+          <div class="current-plan">
+            <h3>Current Plan</h3>
+            <div class="plan-card">
+              <div class="plan-name">Free Plan</div>
+              <div class="plan-details">
+                <div>Monthly credits: 100</div>
+                <div>Storage: 5 GB</div>
+                <div>Presentations: Unlimited</div>
+              </div>
+              <button class="btn btn-primary">Upgrade to Pro</button>
+            </div>
+          </div>
+
+          <div class="billing-history">
+            <h3>Billing History</h3>
+            <p style="color: #a0a0a0; margin-bottom: 16px;">No billing history available yet</p>
+            <table class="invoices-table" style="display:none;">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Invoice</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Invoices will be listed here -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="payment-methods">
+            <h3>Payment Methods</h3>
+            <button class="btn btn-secondary">Add Payment Method</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- API KEYS SECTION -->
+      <section id="api-section" class="settings-section">
+        <div class="section-header">
+          <h2>API Keys</h2>
+          <p>Manage developer access</p>
+        </div>
+
+        <div class="api-container">
+          <button class="btn btn-primary" id="generateKeyBtn">
+            Generate New Key
+          </button>
+
+          <div id="api-keys-list" class="api-keys-list">
+            <p style="color: #a0a0a0; margin-top: 16px;">No API keys generated yet</p>
+          </div>
+
+          <div class="api-documentation">
+            <h3>Documentation</h3>
+            <p>Learn how to use the API</p>
+            <a href="/docs/api" target="_blank" class="btn btn-secondary">View API Docs</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ACCOUNT SECTION -->
+      <section id="account-section" class="settings-section">
+        <div class="section-header">
+          <h2>Account</h2>
+          <p>Manage your account status</p>
+        </div>
+
+        <div class="account-items">
+          <div class="account-item">
+            <div class="item-header">
+              <h3>Download Your Data</h3>
+              <p>Export all your presentations and settings</p>
+            </div>
+            <button class="btn btn-secondary" id="downloadDataBtn">Download Data</button>
+          </div>
+
+          <div class="account-item danger">
+            <div class="item-header">
+              <h3>Delete Account</h3>
+              <p>Permanently delete your account and all data</p>
+            </div>
+            <button class="btn btn-danger" id="deleteAccountBtn">
+              Delete Account
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="config.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

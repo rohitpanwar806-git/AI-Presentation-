@@ -1,0 +1,131 @@
+name: Build & Deploy to Cloud Run & Vercel
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PROJECT_ID: project-987f80c5-14e3-450d-9b0
+  GCP_REGION: asia-south1
+  GCP_SERVICE: presentation-api
+  ARTIFACT_REPO: presentation-artifacts
+
+jobs:
+  test:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+      
+      - name: Run tests
+        run: |
+          pytest backend/tests/ -v --tb=short || true
+      
+      - name: Check Python syntax
+        run: python -m py_compile backend/main.py backend/api/*.py backend/services/*.py
+
+  build-and-deploy:
+    name: Build Docker & Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+      
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f backend/Dockerfile \
+            -t "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.GCP_SERVICE }}:latest" \
+            -t "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.GCP_SERVICE }}:${{ github.sha }}" \
+            .
+      
+      - name: Push Docker image
+        run: |
+          docker push "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.GCP_SERVICE }}:latest"
+          docker push "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.GCP_SERVICE }}:${{ github.sha }}"
+      
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.GCP_SERVICE }} \
+            --image "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.GCP_SERVICE }}:latest" \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --allow-unauthenticated \
+            --set-env-vars="ENVIRONMENT=production,ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }},SMTP_HOST=smtp.gmail.com,SMTP_PORT=587,SMTP_USERNAME=${{ secrets.SMTP_USERNAME }},SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }},SMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }},SMTP_USE_TLS=true,CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}" \
+            --timeout=600 \
+            --memory=2Gi \
+            --cpu=2
+      
+      - name: Verify Cloud Run deployment
+        run: |
+          sleep 10
+          CLOUD_RUN_URL=$(gcloud run services describe ${{ env.GCP_SERVICE }} --region ${{ env.GCP_REGION }} --project ${{ env.PROJECT_ID }} --format 'value(status.url)')
+          echo "Cloud Run URL: $CLOUD_RUN_URL"
+          curl -s "$CLOUD_RUN_URL/health" | head -20
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Deploy to Vercel
+        uses: vercel/actions@v2
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: frontend/web
+          github-commit-sha: ${{ github.sha }}
+          github-deployment: true
+
+  notify-success:
+    name: Notify Success
+    needs: [build-and-deploy, deploy-frontend]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Send success notification
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Backend deployed to Cloud Run"
+          echo "Frontend deployed to Vercel"

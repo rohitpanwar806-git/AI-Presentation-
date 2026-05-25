@@ -1,0 +1,15 @@
+{
+  "buildCommand": "echo 'Static files ready'",
+  "public": "frontend/web",
+  "outputDirectory": "frontend/web",
+  "routes": [
+    {
+      "src": "/settings(?:/)?$",
+      "dest": "/settings.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

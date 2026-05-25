@@ -1,0 +1,103 @@
+[debug] [2026-05-25T11:38:49.912Z] ----------------------------------------------------------------------
+[debug] [2026-05-25T11:38:49.916Z] Command:       C:\DevSoftwares\node-v25.2.1-win-x64\node-v25.2.1-win-x64\node.exe C:\DevSoftwares\npm-global\node_modules\firebase-tools\lib\bin\firebase.js projects:create --display-name=AI Presentation Avatar
+[debug] [2026-05-25T11:38:49.916Z] CLI Version:   15.18.0
+[debug] [2026-05-25T11:38:49.917Z] Platform:      win32
+[debug] [2026-05-25T11:38:49.917Z] Node Version:  v25.2.1
+[debug] [2026-05-25T11:38:49.917Z] Time:          Mon May 25 2026 17:08:49 GMT+0530 (India Standard Time)
+[debug] [2026-05-25T11:38:49.917Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-25T11:38:50.154Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-25T11:38:50.155Z] > authorizing via signed-in user (rohitpanwar806@gmail.com)
+[debug] [2026-05-25T11:40:09.670Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:09.670Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:09.672Z] >>> [apiv2][query] POST https://firebase.googleapis.com/v1/projects:checkProjectId [none]
+[debug] [2026-05-25T11:40:09.672Z] >>> [apiv2][body] POST https://firebase.googleapis.com/v1/projects:checkProjectId {"proposedId":"project-987f80c5-14e3-450d"}
+[debug] [2026-05-25T11:40:10.320Z] <<< [apiv2][status] POST https://firebase.googleapis.com/v1/projects:checkProjectId 200
+[debug] [2026-05-25T11:40:10.320Z] <<< [apiv2][body] POST https://firebase.googleapis.com/v1/projects:checkProjectId {"projectIdStatus":"PROJECT_ID_AVAILABLE","suggestedProjectId":"project-987f80c5-14e3-450d"}
+[debug] [2026-05-25T11:40:10.326Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:10.326Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:10.326Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects [none]
+[debug] [2026-05-25T11:40:10.326Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects {"projectId":"project-987f80c5-14e3-450d","name":"AI Presentation Avatar"}
+[debug] [2026-05-25T11:40:11.086Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects 200
+[debug] [2026-05-25T11:40:11.086Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects {"name":"operations/create_project.global.5219622480226235860"}
+[debug] [2026-05-25T11:40:11.087Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:11.087Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:11.087Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 [none]
+[debug] [2026-05-25T11:40:11.738Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 200
+[debug] [2026-05-25T11:40:11.739Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 {"name":"operations/create_project.global.5219622480226235860"}
+[debug] [2026-05-25T11:40:12.243Z] [Project Creation Poller] Retrying task index 0
+[debug] [2026-05-25T11:40:12.244Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:12.244Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:12.244Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 [none]
+[debug] [2026-05-25T11:40:12.425Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 200
+[debug] [2026-05-25T11:40:12.425Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 {"name":"operations/create_project.global.5219622480226235860"}
+[debug] [2026-05-25T11:40:13.436Z] [Project Creation Poller] Retrying task index 0
+[debug] [2026-05-25T11:40:13.436Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:13.437Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:13.437Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 [none]
+[debug] [2026-05-25T11:40:13.608Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 200
+[debug] [2026-05-25T11:40:13.609Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.5219622480226235860 {"name":"operations/create_project.global.5219622480226235860","metadata":{"@type":"type.googleapis.com/google.cloudresourcemanager.v1.ProjectCreationStatus","gettable":true,"ready":true},"done":true,"response":{"@type":"type.googleapis.com/google.cloudresourcemanager.v1.Project","projectNumber":"733225757642","projectId":"project-987f80c5-14e3-450d","lifecycleState":"ACTIVE","name":"AI Presentation Avatar","createTime":"2026-05-25T11:40:10.961Z"}}
+[debug] [2026-05-25T11:40:13.611Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:13.612Z] Checked if tokens are valid: true, expires at: 1779712429981
+[debug] [2026-05-25T11:40:13.612Z] >>> [apiv2][query] POST https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d:addFirebase [none]
+[debug] [2026-05-25T11:40:14.812Z] <<< [apiv2][status] POST https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d:addFirebase 403
+[debug] [2026-05-25T11:40:14.812Z] <<< [apiv2][body] POST https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d:addFirebase {"error":{"code":403,"message":"The caller does not have permission","status":"PERMISSION_DENIED"}}
+[debug] [2026-05-25T11:40:14.813Z] Request to https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d:addFirebase had HTTP Error: 403, The caller does not have permission
+[debug] [2026-05-25T11:40:14.815Z] FirebaseError: Request to https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d:addFirebase had HTTP Error: 403, The caller does not have permission
+    at responseToError (C:\DevSoftwares\npm-global\node_modules\firebase-tools\lib\responseToError.js:53:12)
+    at RetryOperation._fn (C:\DevSoftwares\npm-global\node_modules\firebase-tools\lib\apiv2.js:333:77)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[error] 
+[error] Error: Failed to add Firebase to Google Cloud Platform project. See firebase-debug.log for more info.
+[debug] [2026-05-25T13:50:44.182Z] ----------------------------------------------------------------------
+[debug] [2026-05-25T13:50:44.187Z] Command:       C:\DevSoftwares\node-v25.2.1-win-x64\node-v25.2.1-win-x64\node.exe C:\DevSoftwares\npm-global\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting --project project-987f80c5-14e3-450d-9b0
+[debug] [2026-05-25T13:50:44.187Z] CLI Version:   15.18.0
+[debug] [2026-05-25T13:50:44.187Z] Platform:      win32
+[debug] [2026-05-25T13:50:44.187Z] Node Version:  v25.2.1
+[debug] [2026-05-25T13:50:44.187Z] Time:          Mon May 25 2026 19:20:44 GMT+0530 (India Standard Time)
+[debug] [2026-05-25T13:50:44.187Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-25T13:51:21.878Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-25T13:51:21.879Z] > authorizing via signed-in user (rohitpanwar806@gmail.com)
+[debug] [2026-05-25T13:51:21.879Z] [iam] checking project project-987f80c5-14e3-450d-9b0 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-05-25T13:51:21.881Z] Checked if tokens are valid: false, expires at: 1779712429981
+[debug] [2026-05-25T13:51:21.881Z] Checked if tokens are valid: false, expires at: 1779712429981
+[debug] [2026-05-25T13:51:21.881Z] > refreshing access token with scopes: []
+[debug] [2026-05-25T13:51:21.883Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-05-25T13:51:21.883Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-25T13:51:22.043Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-05-25T13:51:22.043Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-25T13:51:22.097Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0:testIamPermissions [none]
+[debug] [2026-05-25T13:51:22.097Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0:testIamPermissions  x-goog-user-project=project-987f80c5-14e3-450d-9b0
+[debug] [2026-05-25T13:51:22.098Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-05-25T13:51:22.731Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0:testIamPermissions 200
+[debug] [2026-05-25T13:51:22.731Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-05-25T13:51:22.732Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:22.732Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:22.732Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d-9b0 [none]
+[debug] [2026-05-25T13:51:23.121Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d-9b0 404
+[debug] [2026-05-25T13:51:23.121Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d-9b0 {"error":{"code":404,"message":"Requested entity was not found.","status":"NOT_FOUND"}}
+[debug] [2026-05-25T13:51:23.122Z] Couldn't get project info from firedata for project-987f80c5-14e3-450d-9b0, trying resource manager. Original error: FirebaseError: Request to https://firebase.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d-9b0 had HTTP Error: 404, Requested entity was not found.
+[debug] [2026-05-25T13:51:23.124Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:23.124Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:23.124Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0 [none]
+[debug] [2026-05-25T13:51:23.295Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0 200
+[debug] [2026-05-25T13:51:23.295Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0 {"projectNumber":"558900038680","projectId":"project-987f80c5-14e3-450d-9b0","lifecycleState":"ACTIVE","name":"My First Project","createTime":"2026-05-25T08:52:18.454Z","parent":{"type":"organization","id":"515270609423"}}
+[debug] [2026-05-25T13:51:23.295Z] the default site does not exist on the Firebase project; asking Hosting.
+[debug] [2026-05-25T13:51:23.295Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:23.295Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:23.296Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d-9b0/sites pageToken=&pageSize=10
+[debug] [2026-05-25T13:51:24.159Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d-9b0/sites 200
+[debug] [2026-05-25T13:51:24.159Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/project-987f80c5-14e3-450d-9b0/sites {}
+[info] i  No Hosting site detected. 
+[debug] [2026-05-25T13:51:24.161Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:24.161Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:24.161Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0 [none]
+[debug] [2026-05-25T13:51:24.328Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0 200
+[debug] [2026-05-25T13:51:24.328Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/project-987f80c5-14e3-450d-9b0 {"projectNumber":"558900038680","projectId":"project-987f80c5-14e3-450d-9b0","lifecycleState":"ACTIVE","name":"My First Project","createTime":"2026-05-25T08:52:18.454Z","parent":{"type":"organization","id":"515270609423"}}
+[debug] [2026-05-25T13:51:24.328Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:24.328Z] Checked if tokens are valid: true, expires at: 1779720681043
+[debug] [2026-05-25T13:51:24.329Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/558900038680/sites siteId=project-987f80c5-14e3-450d-9b0&validateOnly=true
+[debug] [2026-05-25T13:51:24.329Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/558900038680/sites {"appId":""}
+[debug] [2026-05-25T13:51:25.241Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/558900038680/sites 200
+[debug] [2026-05-25T13:51:25.242Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/558900038680/sites {"name":"projects/558900038680/sites/project-987f80c5-14e3-450d-9b0","defaultUrl":"https://project-987f80c5-14e3-450d-9b0.web.app","type":"DEFAULT_SITE"}
