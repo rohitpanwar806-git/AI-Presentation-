@@ -78,7 +78,8 @@ function initGoogleAuth() {
     if (window.google) {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleResponse
+        callback: handleGoogleResponse,
+        use_fedcm_for_prompt: false
       });
     }
   };
