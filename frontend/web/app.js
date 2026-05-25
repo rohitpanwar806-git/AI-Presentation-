@@ -409,27 +409,30 @@ async function handleFileUpload(file) {
   }
 }
 
-// ==================== PRESENTATIONS ====================
+// ==================== PRESENTATIONS MANAGEMENT ====================
+let presData = { presentations: [], summary: {}, currentFilter: 'all', editingId: null };
+
 async function loadPresentations() {
   if (!state.token) return;
 
   try {
-    const res = await apiRequest('/presentations/', {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${state.token}` }
-    });
+    const sort = document.getElementById('presSortSelect')?.value || 'newest';
+    const res = await apiRequest(`/presentations/?sort=${sort}`);
 
     if (res.ok) {
       const data = await res.json();
-      state.presentations = Array.isArray(data) ? data : (data.presentations || []);
+      state.presentations = data.presentations || [];
+      presData.presentations = state.presentations;
+      presData.summary = data.summary || {};
       renderPresentations();
+      renderPresentationsInDashboard();
     }
   } catch {
-    // Silent fail - presentations list is optional
+    // Silent fail
   }
 }
 
-function renderPresentations() {
+function renderPresentationsInDashboard() {
   const container = document.getElementById('presentationsList');
   if (!container) return;
 
@@ -438,45 +441,256 @@ function renderPresentations() {
     return;
   }
 
+  // Show latest 3 in dashboard
+  const latest = state.presentations.slice(0, 3);
   const html = `
-    <h3 class="dash-section-title" style="margin-top:48px;">Your Presentations</h3>
-    ${state.presentations.map(p => `
-      <div class="presentation-item">
+    <h3 class="dash-section-title" style="margin-top:48px;">Recent Presentations</h3>
+    ${latest.map(p => `
+      <div class="presentation-item" style="cursor:pointer;" onclick="openPresPanel()">
         <div class="presentation-info">
-          <span class="presentation-icon">📄</span>
+          <span class="presentation-icon">${getFileIcon(p.file_type)}</span>
           <div class="presentation-meta">
-            <h4>${escapeHtml(p.filename || p.title || 'Untitled')}</h4>
-            <span>${formatDate(p.created_at || p.uploaded_at)} • ${p.file_type || 'Document'}</span>
+            <h4>${escapeHtml(p.title || p.filename || 'Untitled')}</h4>
+            <span>${formatDate(p.created_at)} • ${p.file_type || 'Document'} • ${p.analytics?.views || 0} views</span>
           </div>
         </div>
         <div class="presentation-actions">
-          <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="deletePresentation('${p.id}')">Delete</button>
+          <span class="pres-status-badge ${p.status}">${p.status}</span>
         </div>
       </div>
     `).join('')}
+    ${state.presentations.length > 3 ? `<p style="text-align:center;margin-top:16px;"><button class="btn btn-ghost" onclick="openPresPanel()">View All (${state.presentations.length})</button></p>` : ''}
   `;
-
   container.innerHTML = html;
 }
 
-async function deletePresentation(id) {
-  if (!confirm('Delete this presentation?')) return;
+function renderPresentations() {
+  // This renders in the full presentations panel
+  renderPresStats();
+  renderPresList();
+}
+
+function renderPresStats() {
+  const container = document.getElementById('presStats');
+  if (!container) return;
+  const s = presData.summary;
+  container.innerHTML = `
+    <div class="stat-card"><div class="stat-value">${s.total_presentations || 0}</div><div class="stat-label">Total Presentations</div></div>
+    <div class="stat-card"><div class="stat-value">${s.total_views || 0}</div><div class="stat-label">Total Views</div></div>
+    <div class="stat-card"><div class="stat-value">${s.total_shares || 0}</div><div class="stat-label">Total Shares</div></div>
+    <div class="stat-card"><div class="stat-value">${s.statuses?.published || 0}</div><div class="stat-label">Published</div></div>
+  `;
+}
+
+function renderPresList() {
+  const container = document.getElementById('presListContainer');
+  if (!container) return;
+
+  let filtered = presData.presentations;
+  if (presData.currentFilter !== 'all') {
+    filtered = filtered.filter(p => p.status === presData.currentFilter);
+  }
+
+  if (!filtered.length) {
+    container.innerHTML = `
+      <div class="pres-empty">
+        <div class="pres-empty-icon">📂</div>
+        <h3>${presData.currentFilter === 'all' ? 'No presentations yet' : `No ${presData.currentFilter} presentations`}</h3>
+        <p>Upload a document from the dashboard to create your first AI presentation.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(p => `
+    <div class="pres-card" id="pres-card-${p.id}">
+      <div class="pres-card-top">
+        <div class="pres-card-info">
+          <h4>${getFileIcon(p.file_type)} ${escapeHtml(p.title || p.filename)}</h4>
+          <div class="pres-meta">
+            <span>📅 ${formatDate(p.created_at)}</span>
+            <span>📁 ${p.file_type}</span>
+            <span>💾 ${formatFileSize(p.file_size)}</span>
+            ${p.avatar_id ? '<span>🎭 Avatar set</span>' : ''}
+            ${p.voice_id ? '<span>🗣️ Voice set</span>' : ''}
+          </div>
+          ${p.description ? `<div class="pres-desc">${escapeHtml(p.description)}</div>` : ''}
+        </div>
+        <span class="pres-status-badge ${p.status}">${p.status}</span>
+      </div>
+      <div class="pres-card-analytics">
+        <div class="pres-analytic"><span class="analytic-icon">👁️</span> <strong>${p.analytics.views}</strong> views</div>
+        <div class="pres-analytic"><span class="analytic-icon">👤</span> <strong>${p.analytics.unique_viewers}</strong> unique viewers</div>
+        <div class="pres-analytic"><span class="analytic-icon">🔗</span> <strong>${p.analytics.shares}</strong> shares</div>
+        <div class="pres-analytic"><span class="analytic-icon">✅</span> <strong>${p.analytics.completion_rate}%</strong> completion</div>
+        ${p.analytics.last_viewed ? `<div class="pres-analytic"><span class="analytic-icon">🕐</span> Last viewed ${formatDate(p.analytics.last_viewed)}</div>` : ''}
+      </div>
+      <div class="pres-card-actions">
+        <button class="pres-btn primary" onclick="viewPresentation('${p.id}')">▶ View</button>
+        <button class="pres-btn" onclick="editPresentation('${p.id}')">✏️ Edit</button>
+        <button class="pres-btn" onclick="sharePresentation('${p.id}')">🔗 Share</button>
+        <button class="pres-btn danger" onclick="deletePresentation('${p.id}')">🗑️ Delete</button>
+      </div>
+      <div id="pres-edit-${p.id}"></div>
+    </div>
+  `).join('');
+}
+
+function openPresPanel() {
+  document.getElementById('presPanel').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  loadPresentations();
+}
+
+function closePresPanel() {
+  document.getElementById('presPanel').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function filterPresentations(el, status) {
+  document.querySelectorAll('#presFilters .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  presData.currentFilter = status;
+  document.getElementById('presListTitle').textContent = status === 'all' ? 'All Presentations' : `${status.charAt(0).toUpperCase() + status.slice(1)} Presentations`;
+  renderPresList();
+}
+
+function sortPresentations() {
+  loadPresentations();
+}
+
+async function viewPresentation(id) {
+  // Record view and show toast
+  try {
+    await apiRequest(`/presentations/${id}/view`, { method: 'POST' });
+    const p = presData.presentations.find(x => x.id === id);
+    if (p) p.analytics.views++;
+    renderPresList();
+    showToast('Presentation opened — view recorded', 'success');
+  } catch {
+    showToast('Could not record view', 'error');
+  }
+}
+
+function editPresentation(id) {
+  const container = document.getElementById(`pres-edit-${id}`);
+  const p = presData.presentations.find(x => x.id === id);
+  if (!p) return;
+
+  if (presData.editingId === id) {
+    container.innerHTML = '';
+    presData.editingId = null;
+    return;
+  }
+  presData.editingId = id;
+
+  container.innerHTML = `
+    <div class="pres-edit-form">
+      <label>Title</label>
+      <input type="text" id="editTitle-${id}" value="${escapeHtml(p.title || '')}" placeholder="Presentation title">
+      <label>Description</label>
+      <textarea id="editDesc-${id}" placeholder="Add a description...">${escapeHtml(p.description || '')}</textarea>
+      <label>Status</label>
+      <select id="editStatus-${id}" class="pres-sort-select" style="width:100%;">
+        <option value="uploaded" ${p.status === 'uploaded' ? 'selected' : ''}>Uploaded</option>
+        <option value="processing" ${p.status === 'processing' ? 'selected' : ''}>Processing</option>
+        <option value="ready" ${p.status === 'ready' ? 'selected' : ''}>Ready</option>
+        <option value="published" ${p.status === 'published' ? 'selected' : ''}>Published</option>
+      </select>
+      <div class="pres-edit-actions">
+        <button class="pres-btn primary" onclick="savePresentation('${id}')">Save Changes</button>
+        <button class="pres-btn" onclick="editPresentation('${id}')">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+async function savePresentation(id) {
+  const title = document.getElementById(`editTitle-${id}`).value.trim();
+  const description = document.getElementById(`editDesc-${id}`).value.trim();
+  const newStatus = document.getElementById(`editStatus-${id}`).value;
 
   try {
     const res = await apiRequest(`/presentations/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${state.token}` }
+      method: 'PUT',
+      body: JSON.stringify({ title, description, status: newStatus })
     });
 
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(data, 'Failed to update'));
+    }
+
+    const data = await res.json();
+    // Update local state
+    const idx = presData.presentations.findIndex(x => x.id === id);
+    if (idx !== -1 && data.presentation) {
+      presData.presentations[idx] = data.presentation;
+      state.presentations = presData.presentations;
+    }
+    presData.editingId = null;
+    renderPresList();
+    renderPresentationsInDashboard();
+    showToast('Presentation updated!', 'success');
+  } catch (err) {
+    showToast(err.message || 'Update failed', 'error');
+  }
+}
+
+async function sharePresentation(id) {
+  try {
+    await apiRequest(`/presentations/${id}/share`, { method: 'POST' });
+    const p = presData.presentations.find(x => x.id === id);
+    if (p) p.analytics.shares++;
+    renderPresList();
+    // Copy a mock share link
+    const shareUrl = `${window.location.origin}/view/${id}`;
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast('Share link copied to clipboard!', 'success');
+    } else {
+      showToast('Share recorded! Link: ' + shareUrl, 'success');
+    }
+  } catch {
+    showToast('Failed to share', 'error');
+  }
+}
+
+async function deletePresentation(id) {
+  if (!confirm('Are you sure you want to delete this presentation? This cannot be undone.')) return;
+
+  try {
+    const res = await apiRequest(`/presentations/${id}`, { method: 'DELETE' });
+
     if (res.ok) {
+      presData.presentations = presData.presentations.filter(p => p.id !== id);
+      state.presentations = presData.presentations;
+      presData.summary.total_presentations = presData.presentations.length;
+      renderPresentations();
+      renderPresentationsInDashboard();
       showToast('Presentation deleted', 'success');
-      loadPresentations();
     } else {
       showToast('Failed to delete', 'error');
     }
   } catch {
     showToast('Failed to delete', 'error');
   }
+}
+
+function getFileIcon(type) {
+  switch(type) {
+    case 'PDF': return '📕';
+    case 'PowerPoint': return '📙';
+    case 'Word': return '📘';
+    default: return '📄';
+  }
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 // ==================== API HELPER ====================
@@ -574,6 +788,7 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'authModal') closeAuth();
   if (e.target.id === 'avatarPanel') closeAvatarPanel();
   if (e.target.id === 'voicePanel') closeVoicePanel();
+  if (e.target.id === 'presPanel') closePresPanel();
 });
 
 // Close modal on Escape
@@ -582,6 +797,7 @@ document.addEventListener('keydown', (e) => {
     closeAuth();
     closeAvatarPanel();
     closeVoicePanel();
+    closePresPanel();
   }
 });
 
@@ -798,6 +1014,8 @@ function confirmVoiceSelection() {
 document.addEventListener('DOMContentLoaded', () => {
   const cardAvatars = document.getElementById('cardAvatars');
   const cardVoices = document.getElementById('cardVoices');
+  const cardPresentations = document.getElementById('cardPresentations');
   if (cardAvatars) cardAvatars.addEventListener('click', openAvatarPanel);
   if (cardVoices) cardVoices.addEventListener('click', openVoicePanel);
+  if (cardPresentations) cardPresentations.addEventListener('click', openPresPanel);
 });
