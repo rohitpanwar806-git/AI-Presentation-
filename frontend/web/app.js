@@ -81,6 +81,17 @@ function initGoogleAuth() {
         callback: handleGoogleResponse,
         use_fedcm_for_prompt: false
       });
+      // Render Google's official button (bypasses FedCM, uses popup)
+      const container = document.getElementById('googleBtnContainer');
+      if (container) {
+        window.google.accounts.id.renderButton(container, {
+          theme: 'filled_black',
+          size: 'large',
+          width: 360,
+          text: 'continue_with',
+          shape: 'pill'
+        });
+      }
     }
   };
   document.head.appendChild(script);
@@ -239,6 +250,7 @@ async function register(email, password) {
 
 async function signInWithGoogle() {
   if (window.google) {
+    // Fallback: try prompt (in case rendered button isn't visible)
     window.google.accounts.id.prompt();
   } else {
     showToast('Google Sign-In is not available', 'error');
