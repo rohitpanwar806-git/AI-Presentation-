@@ -1,6 +1,6 @@
 {
+  "framework": null,
   "buildCommand": "echo 'Static files ready'",
-  "public": "frontend/web",
   "outputDirectory": "frontend/web",
   "routes": [
     {
