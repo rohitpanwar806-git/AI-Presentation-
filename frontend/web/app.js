@@ -228,33 +228,43 @@ async function renderGoogleButtons() {
     ux_mode: 'popup',
   });
 
-  // Calculate responsive button width
-  const containerWidth = Math.min(window.innerWidth - 48, 360); // 48px for padding (24px each side)
-  const buttonWidth = Math.max(containerWidth, 200); // Min 200px, max 360px
-
   const signInHost = document.getElementById('googleSignInBtn');
   const signUpHost = document.getElementById('googleSignUpBtn');
 
+  // Render Sign In button with minimal official parameters
   if (signInHost) {
     signInHost.innerHTML = '';
-    window.google.accounts.id.renderButton(signInHost, {
-      theme: 'outline',
-      size: 'large',
-      text: 'signin_with',
-      width: buttonWidth,
-      shape: 'pill',
-    });
+    try {
+      window.google.accounts.id.renderButton(signInHost, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        logo_alignment: 'left',
+        // Note: width removed as it may cause rendering issues
+      });
+    } catch (err) {
+      console.warn('Google Sign-In button rendering failed:', err);
+      signInHost.innerHTML = '<button class="btn btn-soft" style="width:100%;">Sign in with Google (fallback)</button>';
+    }
   }
 
+  // Render Sign Up button with minimal official parameters
   if (signUpHost) {
     signUpHost.innerHTML = '';
-    window.google.accounts.id.renderButton(signUpHost, {
-      theme: 'filled_blue',
-      size: 'large',
-      text: 'signup_with',
-      width: buttonWidth,
-      shape: 'pill',
-    });
+    try {
+      window.google.accounts.id.renderButton(signUpHost, {
+        type: 'standard',
+        theme: 'filled_blue',
+        size: 'large',
+        text: 'signup_with',
+        logo_alignment: 'left',
+        // Note: width removed as it may cause rendering issues
+      });
+    } catch (err) {
+      console.warn('Google Sign-Up button rendering failed:', err);
+      signUpHost.innerHTML = '<button class="btn btn-soft" style="width:100%;">Sign up with Google (fallback)</button>';
+    }
   }
 }
 
