@@ -185,6 +185,9 @@ function switchAuthTab(tabName) {
   signupView.classList.toggle('active', !signin);
   tabSignin.classList.toggle('active', signin);
   tabSignup.classList.toggle('active', !signin);
+  
+  // Set pending auth mode based on active tab
+  appState.pendingAuthMode = signin ? 'signin' : 'signup';
 }
 
 async function fetchGoogleClientId() {
@@ -240,9 +243,6 @@ async function renderGoogleButtons() {
       text: 'signin_with',
       width: buttonWidth,
       shape: 'pill',
-      click_listener: () => {
-        appState.pendingAuthMode = 'signin';
-      },
     });
   }
 
@@ -254,9 +254,6 @@ async function renderGoogleButtons() {
       text: 'signup_with',
       width: buttonWidth,
       shape: 'pill',
-      click_listener: () => {
-        appState.pendingAuthMode = 'signup';
-      },
     });
   }
 }
