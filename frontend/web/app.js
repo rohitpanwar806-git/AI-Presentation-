@@ -185,7 +185,7 @@ async function login(email, password) {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || 'Invalid email or password');
+    throw new Error(extractErrorMessage(data, 'Invalid email or password'));
   }
 
   const data = await res.json();
@@ -217,7 +217,7 @@ async function register(email, password) {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || 'Registration failed. Please try again.');
+    throw new Error(extractErrorMessage(data, 'Registration failed. Please try again.'));
   }
 
   const data = await res.json();
@@ -256,7 +256,7 @@ async function handleGoogleResponse(response) {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail || 'Google sign-in failed');
+      throw new Error(extractErrorMessage(data, 'Google sign-in failed'));
     }
 
     const data = await res.json();
@@ -265,7 +265,7 @@ async function handleGoogleResponse(response) {
     showDashboard();
     showToast('Signed in with Google!', 'success');
   } catch (err) {
-    showAuthError(err.message);
+    showAuthError(err.message || String(err));
   } finally {
     setAuthLoading(false);
   }
@@ -466,6 +466,16 @@ async function deletePresentation(id) {
 }
 
 // ==================== API HELPER ====================
+function extractErrorMessage(data, fallback) {
+  if (!data || !data.detail) return fallback;
+  if (typeof data.detail === 'string') return data.detail;
+  if (Array.isArray(data.detail)) {
+    return data.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('; ');
+  }
+  if (typeof data.detail === 'object') return data.detail.msg || data.detail.message || JSON.stringify(data.detail);
+  return fallback;
+}
+
 async function apiRequest(path, options = {}) {
   const url = `${API_BASE}${path}`;
   const headers = {
