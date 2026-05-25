@@ -5,7 +5,7 @@ Voice Management Endpoints
 - Get voice details
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from backend.core.security import get_current_user
+from backend.api.auth import _get_current_user
 
 router = APIRouter()
 
@@ -70,7 +70,7 @@ AVAILABLE_VOICES = [
 
 
 @router.get("/")
-async def list_voices(current_user = Depends(get_current_user)):
+async def list_voices(current_user = Depends(_get_current_user)):
     """Get list of available voice models"""
     return {
         "status": "success",
@@ -81,7 +81,7 @@ async def list_voices(current_user = Depends(get_current_user)):
 
 
 @router.get("/{voice_id}")
-async def get_voice(voice_id: str, current_user = Depends(get_current_user)):
+async def get_voice(voice_id: str, current_user = Depends(_get_current_user)):
     """Get specific voice details"""
     voice = next((v for v in AVAILABLE_VOICES if v["id"] == voice_id), None)
     if not voice:
@@ -96,7 +96,7 @@ async def get_voice(voice_id: str, current_user = Depends(get_current_user)):
 
 
 @router.get("/languages/supported")
-async def get_supported_languages(current_user = Depends(get_current_user)):
+async def get_supported_languages(current_user = Depends(_get_current_user)):
     """Get list of supported languages"""
     languages = set(v["language"] for v in AVAILABLE_VOICES)
     return {
@@ -107,7 +107,7 @@ async def get_supported_languages(current_user = Depends(get_current_user)):
 
 
 @router.post("/select")
-async def select_voice(voice_id: str, current_user = Depends(get_current_user)):
+async def select_voice(voice_id: str, current_user = Depends(_get_current_user)):
     """Select voice for presentation"""
     voice = next((v for v in AVAILABLE_VOICES if v["id"] == voice_id), None)
     if not voice:

@@ -5,7 +5,7 @@ Avatar Management Endpoints
 - Customize avatar appearance
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from backend.core.security import get_current_user
+from backend.api.auth import _get_current_user
 
 router = APIRouter()
 
@@ -55,7 +55,7 @@ AVAILABLE_AVATARS = [
 
 
 @router.get("/")
-async def list_avatars(current_user = Depends(get_current_user)):
+async def list_avatars(current_user = Depends(_get_current_user)):
     """Get list of available avatars"""
     return {
         "status": "success",
@@ -66,7 +66,7 @@ async def list_avatars(current_user = Depends(get_current_user)):
 
 
 @router.get("/{avatar_id}")
-async def get_avatar(avatar_id: str, current_user = Depends(get_current_user)):
+async def get_avatar(avatar_id: str, current_user = Depends(_get_current_user)):
     """Get specific avatar details"""
     avatar = next((a for a in AVAILABLE_AVATARS if a["id"] == avatar_id), None)
     if not avatar:
@@ -81,7 +81,7 @@ async def get_avatar(avatar_id: str, current_user = Depends(get_current_user)):
 
 
 @router.post("/select")
-async def select_avatar(avatar_id: str, current_user = Depends(get_current_user)):
+async def select_avatar(avatar_id: str, current_user = Depends(_get_current_user)):
     """Select avatar for presentation"""
     avatar = next((a for a in AVAILABLE_AVATARS if a["id"] == avatar_id), None)
     if not avatar:

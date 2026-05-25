@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional
 import PyPDF2
-from backend.core.security import get_current_user
+from backend.api.auth import _get_current_user
 from backend.services.session_memory import (
     get_session_manager,
     DocumentContext,
@@ -95,7 +95,7 @@ def extract_text_from_file(file_path: str) -> str:
 @router.post("/start", response_model=StartPresentationResponse)
 async def start_presentation(
     request: StartPresentationRequest,
-    current_user = Depends(get_current_user)
+    current_user = Depends(_get_current_user)
 ) -> StartPresentationResponse:
     """
     Start a new presentation session with avatar
@@ -157,7 +157,7 @@ async def start_presentation(
 @router.post("/question", response_model=AvatarResponse)
 async def ask_question(
     request: AudienceQuestion,
-    current_user = Depends(get_current_user)
+    current_user = Depends(_get_current_user)
 ) -> AvatarResponse:
     """
     Answer an audience question using document and session context
@@ -218,7 +218,7 @@ async def ask_question(
 @router.post("/end", response_model=dict)
 async def end_presentation(
     request: EndPresentationRequest,
-    current_user = Depends(get_current_user)
+    current_user = Depends(_get_current_user)
 ) -> dict:
     """
     End presentation session and store summary
@@ -267,7 +267,7 @@ async def end_presentation(
 @router.get("/session/{session_id}", response_model=dict)
 async def get_session_info(
     session_id: str,
-    current_user = Depends(get_current_user)
+    current_user = Depends(_get_current_user)
 ) -> dict:
     """
     Get information about a presentation session
@@ -307,7 +307,7 @@ async def get_session_info(
 async def submit_feedback(
     session_id: str,
     feedback: dict,
-    current_user = Depends(get_current_user)
+    current_user = Depends(_get_current_user)
 ) -> dict:
     """
     Submit feedback about presentation session

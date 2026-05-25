@@ -10,7 +10,7 @@ import mimetypes
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from backend.core.security import get_current_user
+from backend.api.auth import _get_current_user
 from backend.db.database import get_db
 
 router = APIRouter()
@@ -22,7 +22,7 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 @router.post("/upload")
 async def upload_presentation(
     file: UploadFile = File(...),
-    current_user = Depends(get_current_user)
+    current_user = Depends(_get_current_user)
 ):
     """
     Upload a presentation document (PDF, PPTX, or DOCX).
@@ -94,7 +94,7 @@ async def upload_presentation(
 
 
 @router.get("/")
-async def list_presentations(current_user = Depends(get_current_user)):
+async def list_presentations(current_user = Depends(_get_current_user)):
     """Get list of user's presentations"""
     return {
         "status": "success",
@@ -104,7 +104,7 @@ async def list_presentations(current_user = Depends(get_current_user)):
 
 
 @router.get("/{presentation_id}")
-async def get_presentation(presentation_id: str, current_user = Depends(get_current_user)):
+async def get_presentation(presentation_id: str, current_user = Depends(_get_current_user)):
     """Get presentation details"""
     return {
         "status": "success",
@@ -114,7 +114,7 @@ async def get_presentation(presentation_id: str, current_user = Depends(get_curr
 
 
 @router.delete("/{presentation_id}")
-async def delete_presentation(presentation_id: str, current_user = Depends(get_current_user)):
+async def delete_presentation(presentation_id: str, current_user = Depends(_get_current_user)):
     """Delete a presentation"""
     return {
         "status": "success",
