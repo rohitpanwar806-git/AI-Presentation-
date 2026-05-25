@@ -392,13 +392,14 @@ async function handleFileUpload(file) {
     }
 
     progressFill.style.width = '100%';
-    uploadStatus.textContent = 'Upload complete!';
+    uploadStatus.textContent = 'Upload complete! Choose your avatar next...';
     showToast(`"${file.name}" uploaded successfully!`, 'success');
 
     setTimeout(() => {
       progress.classList.remove('active');
       progressFill.style.width = '0%';
-    }, 2000);
+      openAvatarPanel();
+    }, 1500);
 
     loadPresentations();
   } catch (err) {
@@ -571,9 +572,232 @@ function formatDate(dateStr) {
 // Close modal on overlay click
 document.addEventListener('click', (e) => {
   if (e.target.id === 'authModal') closeAuth();
+  if (e.target.id === 'avatarPanel') closeAvatarPanel();
+  if (e.target.id === 'voicePanel') closeVoicePanel();
 });
 
 // Close modal on Escape
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeAuth();
+  if (e.key === 'Escape') {
+    closeAuth();
+    closeAvatarPanel();
+    closeVoicePanel();
+  }
+});
+
+// ==================== AVATAR SELECTION ====================
+let avatarData = { avatars: [], categories: [], selectedId: null };
+
+function openAvatarPanel() {
+  document.getElementById('avatarPanel').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  loadAvatars();
+}
+
+function closeAvatarPanel() {
+  document.getElementById('avatarPanel').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+async function loadAvatars() {
+  const grid = document.getElementById('avatarGrid');
+  grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">Loading avatars...</div>';
+
+  try {
+    const res = await apiRequest('/avatars/');
+    if (!res.ok) throw new Error('Failed to load avatars');
+    const data = await res.json();
+    avatarData.avatars = data.avatars || [];
+    avatarData.categories = data.categories || [];
+    renderAvatarFilters();
+    renderAvatarGrid(avatarData.avatars);
+  } catch (err) {
+    grid.innerHTML = `<div style="text-align:center;padding:40px;color:#ff6b6b;">Failed to load avatars: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderAvatarFilters() {
+  const container = document.getElementById('avatarFilters');
+  container.innerHTML = avatarData.categories.map(cat =>
+    `<button class="filter-chip ${cat.id === 'all' ? 'active' : ''}" data-category="${cat.id}" onclick="selectAvatarCategory(this, '${cat.id}')">
+      ${cat.icon} ${cat.name} (${cat.count})
+    </button>`
+  ).join('');
+}
+
+function selectAvatarCategory(el, category) {
+  document.querySelectorAll('#avatarFilters .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  filterAvatars();
+}
+
+function filterAvatars() {
+  const search = document.getElementById('avatarSearch').value.toLowerCase();
+  const activeCategory = document.querySelector('#avatarFilters .filter-chip.active')?.dataset.category || 'all';
+
+  let filtered = avatarData.avatars;
+  if (activeCategory && activeCategory !== 'all') {
+    filtered = filtered.filter(a => a.category === activeCategory);
+  }
+  if (search) {
+    filtered = filtered.filter(a =>
+      a.name.toLowerCase().includes(search) ||
+      a.description.toLowerCase().includes(search) ||
+      a.category.toLowerCase().includes(search)
+    );
+  }
+  renderAvatarGrid(filtered);
+}
+
+function renderAvatarGrid(avatars) {
+  const grid = document.getElementById('avatarGrid');
+  if (!avatars.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No avatars match your filters</div>';
+    return;
+  }
+  grid.innerHTML = avatars.map(a => `
+    <div class="avatar-card ${avatarData.selectedId === a.id ? 'selected' : ''}" onclick="selectAvatar('${a.id}')">
+      <img src="${a.thumbnail}" alt="${escapeHtml(a.name)}" loading="lazy">
+      <div class="avatar-name">${escapeHtml(a.name)}</div>
+      <div class="avatar-desc">${escapeHtml(a.description)}</div>
+      <span class="avatar-badge">${a.category}</span>
+    </div>
+  `).join('');
+}
+
+function selectAvatar(id) {
+  avatarData.selectedId = id;
+  const avatar = avatarData.avatars.find(a => a.id === id);
+  document.getElementById('avatarSelectionInfo').innerHTML = `Selected: <strong>${escapeHtml(avatar?.name || '')}</strong>`;
+  document.getElementById('avatarConfirmBtn').disabled = false;
+  // Re-render to show selection state
+  const search = document.getElementById('avatarSearch').value.toLowerCase();
+  const activeCategory = document.querySelector('#avatarFilters .filter-chip.active')?.dataset.category || 'all';
+  let filtered = avatarData.avatars;
+  if (activeCategory && activeCategory !== 'all') filtered = filtered.filter(a => a.category === activeCategory);
+  if (search) filtered = filtered.filter(a => a.name.toLowerCase().includes(search) || a.description.toLowerCase().includes(search));
+  renderAvatarGrid(filtered);
+}
+
+function confirmAvatarSelection() {
+  if (!avatarData.selectedId) return;
+  const avatar = avatarData.avatars.find(a => a.id === avatarData.selectedId);
+  closeAvatarPanel();
+  showToast(`Avatar "${avatar.name}" selected!`, 'success');
+  // Open voice panel next
+  setTimeout(() => openVoicePanel(), 400);
+}
+
+// ==================== VOICE SELECTION ====================
+let voiceData = { voices: [], languages: [], selectedId: null };
+
+function openVoicePanel() {
+  document.getElementById('voicePanel').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  loadVoices();
+}
+
+function closeVoicePanel() {
+  document.getElementById('voicePanel').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+async function loadVoices() {
+  const grid = document.getElementById('voiceGrid');
+  grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">Loading voices...</div>';
+
+  try {
+    const [voicesRes, langsRes] = await Promise.all([
+      apiRequest('/voices/'),
+      apiRequest('/voices/languages')
+    ]);
+
+    if (!voicesRes.ok) throw new Error('Failed to load voices');
+    const vData = await voicesRes.json();
+    voiceData.voices = vData.voices || [];
+
+    if (langsRes.ok) {
+      const lData = await langsRes.json();
+      voiceData.languages = lData.languages || [];
+      populateLanguageFilter();
+    }
+
+    renderVoiceGrid(voiceData.voices);
+  } catch (err) {
+    grid.innerHTML = `<div style="text-align:center;padding:40px;color:#ff6b6b;">Failed to load voices: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function populateLanguageFilter() {
+  const select = document.getElementById('voiceLangFilter');
+  select.innerHTML = '<option value="">All Languages (' + voiceData.languages.length + ')</option>';
+  voiceData.languages.forEach(lang => {
+    select.innerHTML += `<option value="${lang.code}">${lang.name}</option>`;
+  });
+}
+
+function filterVoices() {
+  const search = document.getElementById('voiceSearch').value.toLowerCase();
+  const lang = document.getElementById('voiceLangFilter').value;
+  const gender = document.getElementById('voiceGenderFilter').value;
+  const provider = document.getElementById('voiceProviderFilter').value;
+
+  let filtered = voiceData.voices;
+  if (lang) filtered = filtered.filter(v => v.language === lang);
+  if (gender) filtered = filtered.filter(v => v.gender === gender);
+  if (provider) filtered = filtered.filter(v => v.provider === provider);
+  if (search) {
+    filtered = filtered.filter(v =>
+      v.name.toLowerCase().includes(search) ||
+      v.language_name.toLowerCase().includes(search) ||
+      v.description.toLowerCase().includes(search) ||
+      v.style.toLowerCase().includes(search)
+    );
+  }
+  renderVoiceGrid(filtered);
+}
+
+function renderVoiceGrid(voices) {
+  const grid = document.getElementById('voiceGrid');
+  if (!voices.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No voices match your filters</div>';
+    return;
+  }
+  grid.innerHTML = voices.map(v => `
+    <div class="voice-card ${voiceData.selectedId === v.id ? 'selected' : ''}" onclick="selectVoice('${v.id}')">
+      <div class="voice-icon">${v.gender === 'female' ? '👩' : '👨'}</div>
+      <div class="voice-info">
+        <div class="voice-name">${escapeHtml(v.name)}</div>
+        <div class="voice-meta">${escapeHtml(v.language_name)} • ${v.accent} • ${v.provider}</div>
+        <div class="voice-desc">${escapeHtml(v.description)}</div>
+        <div class="voice-tags">
+          <span class="voice-tag">${v.style}</span>
+          <span class="voice-tag">${v.gender}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectVoice(id) {
+  voiceData.selectedId = id;
+  const voice = voiceData.voices.find(v => v.id === id);
+  document.getElementById('voiceSelectionInfo').innerHTML = `Selected: <strong>${escapeHtml(voice?.name || '')} (${voice?.language_name || ''})</strong>`;
+  document.getElementById('voiceConfirmBtn').disabled = false;
+  filterVoices(); // re-render to show selection
+}
+
+function confirmVoiceSelection() {
+  if (!voiceData.selectedId) return;
+  const voice = voiceData.voices.find(v => v.id === voiceData.selectedId);
+  closeVoicePanel();
+  showToast(`Voice "${voice.name}" selected! Your presentation is ready to generate.`, 'success');
+}
+
+// ==================== DASHBOARD CARD CLICK HANDLERS ====================
+document.addEventListener('DOMContentLoaded', () => {
+  const cardAvatars = document.getElementById('cardAvatars');
+  const cardVoices = document.getElementById('cardVoices');
+  if (cardAvatars) cardAvatars.addEventListener('click', openAvatarPanel);
+  if (cardVoices) cardVoices.addEventListener('click', openVoicePanel);
 });
