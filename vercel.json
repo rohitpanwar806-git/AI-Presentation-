@@ -8,6 +8,10 @@
       "dest": "/settings.html"
     },
     {
+      "src": "/(.*\\.(?:js|css|ico|png|jpg|jpeg|svg|gif|woff2?|ttf|eot|map|json))$",
+      "dest": "/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
