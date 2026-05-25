@@ -22,12 +22,12 @@ app = FastAPI(
 # CORS Configuration
 cors_origins = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:3000,https://web-orskelu3q-rohitpanwar806-gits-projects.vercel.app"
+    "http://localhost:3000,http://localhost:8080,http://localhost:3001,https://web-orskelu3q-rohitpanwar806-gits-projects.vercel.app,https://web-seven-swart-96tyghlog6.vercel.app"
 ).split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in cors_origins],
-    allow_origin_regex=r"^https://([a-zA-Z0-9-]+-rohitpanwar806-gits-projects\.vercel\.app|web-seven-swart-96tyghlog6\.vercel\.app)$",
+    allow_origin_regex=r"^https://[a-zA-Z0-9-]+\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
