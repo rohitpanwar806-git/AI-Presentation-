@@ -1767,9 +1767,30 @@ document.addEventListener('keydown', (e) => {
   }
   // Arrow keys for slide navigation when viewer is open
   if (document.getElementById('presentationViewer')?.classList.contains('active')) {
+    // Don't intercept keys when user is typing in an input/textarea
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSlide();
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSlide();
     if (e.key === ' ') { e.preventDefault(); togglePlayPause(); }
+  }
+});
+
+// ==================== IDLE / VISIBILITY REFRESH ====================
+let _lastActiveTime = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const idleMs = Date.now() - _lastActiveTime;
+    // If page was hidden for over 2 minutes and user is logged in, refresh data
+    if (idleMs > 2 * 60 * 1000 && state.token && state.user) {
+      // Re-validate session and reload presentations
+      checkExistingSession();
+      if (document.getElementById('dashboard')?.classList.contains('active')) {
+        loadPresentations();
+      }
+    }
+  } else {
+    _lastActiveTime = Date.now();
   }
 });
 

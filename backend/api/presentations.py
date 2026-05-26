@@ -574,6 +574,30 @@ async def get_shared_presentation(share_token: str, db: Session = Depends(get_db
     }
 
 
+@router.post("/shared/{share_token}/ask")
+async def shared_ask_question(share_token: str, req: AskRequest = Body(...), db: Session = Depends(get_db)):
+    """Public Q&A endpoint for shared presentations (no auth required)."""
+    pres = _get_db_presentation_by_token(db, share_token)
+    if not pres:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found or has expired")
+
+    if pres.share_expires_at and datetime.now(timezone.utc) > pres.share_expires_at:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="This shared link has expired")
+
+    if not req.question or not req.question.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question cannot be empty")
+
+    document_text = pres.document_text or ""
+    answer = answer_question(
+        document_text=document_text,
+        question=req.question.strip(),
+        presentation_title=pres.title,
+        chat_history=req.chat_history
+    )
+
+    return {"status": "success", "answer": answer}
+
+
 # ==================== QUIZ GENERATION ====================
 
 class QuizRequest(BaseModel):
