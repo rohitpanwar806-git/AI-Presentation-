@@ -1101,6 +1101,190 @@ body {
   50% { opacity: 0.5; transform: scale(0.9); }
 }
 
+/* ===== GENERATE PANEL ===== */
+.generate-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: rgba(10, 10, 30, 0.95);
+  backdrop-filter: blur(10px);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 2rem;
+}
+.generate-overlay.active { display: flex; }
+.generate-card {
+  background: linear-gradient(135deg, #1a1a3e, #0f1029);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 20px;
+  padding: 3rem;
+  max-width: 600px;
+  width: 100%;
+  text-align: center;
+}
+.generate-card h2 { color: #fff; margin-bottom: 0.5rem; font-size: 1.8rem; }
+.generate-card .gen-subtitle { color: #94a3b8; margin-bottom: 2rem; }
+.gen-summary {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+.gen-item {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  text-align: center;
+}
+.gen-item .gen-icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+.gen-item .gen-label { color: #94a3b8; font-size: 0.75rem; }
+.gen-item .gen-value { color: #fff; font-weight: 600; font-size: 0.9rem; }
+.generate-btn {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  border: none;
+  padding: 1rem 3rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  width: 100%;
+  margin-top: 1rem;
+}
+.generate-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4); }
+.generate-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.gen-progress {
+  display: none;
+  margin-top: 1.5rem;
+  text-align: left;
+}
+.gen-progress.active { display: block; }
+.gen-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  color: #64748b;
+  font-size: 0.9rem;
+  transition: color 0.3s;
+}
+.gen-step.active { color: #6366f1; }
+.gen-step.done { color: #10b981; }
+.gen-step-icon { width: 20px; text-align: center; }
+.gen-close {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+}
+
+/* ===== Q&A CHAT IN VIEWER ===== */
+.viewer-qa {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 360px;
+  background: rgba(15, 16, 41, 0.97);
+  border-left: 1px solid rgba(99, 102, 241, 0.2);
+  display: none;
+  flex-direction: column;
+  z-index: 10;
+}
+.viewer-qa.active { display: flex; }
+.qa-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.qa-header h3 { color: #fff; font-size: 1rem; margin: 0; }
+.qa-close-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
+.qa-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.qa-msg {
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 90%;
+  word-wrap: break-word;
+}
+.qa-msg.user {
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+.qa-msg.assistant {
+  background: rgba(30, 32, 60, 0.9);
+  color: #e2e8f0;
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  border: 1px solid rgba(99, 102, 241, 0.1);
+}
+.qa-msg.typing { color: #6366f1; font-style: italic; }
+.qa-input-row {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid rgba(99, 102, 241, 0.15);
+  display: flex;
+  gap: 0.5rem;
+}
+.qa-input {
+  flex: 1;
+  background: rgba(30, 32, 60, 0.8);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  color: #fff;
+  font-size: 0.85rem;
+  outline: none;
+}
+.qa-input:focus { border-color: #6366f1; }
+.qa-send-btn {
+  background: #6366f1;
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.qa-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.qa-toggle-btn {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #c7d2fe;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.qa-toggle-btn:hover { background: rgba(99, 102, 241, 0.3); }
+@media (max-width: 768px) {
+  .viewer-qa { width: 100%; position: fixed; top: 50%; bottom: 0; border-left: none; border-top: 1px solid rgba(99,102,241,0.2); }
+}
+
 /* ===== PRESENTATION VIEWER ===== */
 .viewer-overlay {
   display: none;
@@ -2032,11 +2216,48 @@ body {
   </div>
 </div>
 
+<!-- GENERATE PANEL -->
+<div class="generate-overlay" id="generatePanel">
+  <button class="gen-close" onclick="closeGeneratePanel()">✕</button>
+  <div class="generate-card">
+    <h2>🚀 Generate AI Presentation</h2>
+    <p class="gen-subtitle">Your AI avatar will analyze the document and create a live presentation</p>
+    <div class="gen-summary">
+      <div class="gen-item">
+        <div class="gen-icon">📄</div>
+        <div class="gen-value" id="genDocName">Document</div>
+        <div class="gen-label">File</div>
+      </div>
+      <div class="gen-item">
+        <div class="gen-icon">🎭</div>
+        <div class="gen-value" id="genAvatarName">Avatar</div>
+        <div class="gen-label">Presenter</div>
+      </div>
+      <div class="gen-item">
+        <div class="gen-icon">🗣️</div>
+        <div class="gen-value" id="genVoiceName">Voice</div>
+        <div class="gen-label">Narration</div>
+      </div>
+    </div>
+    <button class="generate-btn" id="generateBtn" onclick="startGeneration()">
+      ✨ Generate Presentation
+    </button>
+    <div class="gen-progress" id="genProgress">
+      <div class="gen-step" id="genStep1"><span class="gen-step-icon">○</span> Extracting document content...</div>
+      <div class="gen-step" id="genStep2"><span class="gen-step-icon">○</span> Analyzing key topics & structure...</div>
+      <div class="gen-step" id="genStep3"><span class="gen-step-icon">○</span> Generating presentation slides...</div>
+      <div class="gen-step" id="genStep4"><span class="gen-step-icon">○</span> Assigning avatar & voice...</div>
+      <div class="gen-step" id="genStep5"><span class="gen-step-icon">○</span> Finalizing presentation...</div>
+    </div>
+  </div>
+</div>
+
 <!-- PRESENTATION VIEWER -->
 <div class="viewer-overlay" id="presentationViewer">
   <div class="viewer-topbar">
     <div class="viewer-title" id="viewerTitle">Presentation <span id="viewerMeta"></span></div>
     <div class="viewer-topbar-actions">
+      <button class="qa-toggle-btn" onclick="toggleQAPanel()">💬 Ask Questions</button>
       <button class="viewer-topbar-btn" onclick="toggleViewerFullscreen()">⛶ Fullscreen</button>
       <button class="viewer-topbar-btn" onclick="closeViewer()">✕ Close</button>
     </div>
@@ -2063,6 +2284,20 @@ body {
         <div class="sound-wave-bar"></div>
         <div class="sound-wave-bar"></div>
         <div class="sound-wave-bar"></div>
+      </div>
+    </div>
+    <!-- Q&A Chat Panel -->
+    <div class="viewer-qa" id="viewerQA">
+      <div class="qa-header">
+        <h3>💬 Ask Your AI Tutor</h3>
+        <button class="qa-close-btn" onclick="toggleQAPanel()">✕</button>
+      </div>
+      <div class="qa-messages" id="qaMessages">
+        <div class="qa-msg assistant">Hi! I'm your AI tutor for this presentation. Ask me anything about the content — I'll explain it clearly.</div>
+      </div>
+      <div class="qa-input-row">
+        <input class="qa-input" id="qaInput" type="text" placeholder="Ask a question about this document..." onkeydown="if(event.key==='Enter')sendQuestion()">
+        <button class="qa-send-btn" id="qaSendBtn" onclick="sendQuestion()">Send</button>
       </div>
     </div>
   </div>

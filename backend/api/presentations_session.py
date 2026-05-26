@@ -128,8 +128,9 @@ async def start_presentation(
         )
         
         # Create session
+        user_id = getattr(current_user, "id", "unknown")
         session_id = session_manager.create_session(
-            user_id=str(current_user.get("id", "unknown")),
+            user_id=str(user_id),
             avatar_id=request.avatar_id,
             voice_id=request.voice_id,
             document=document,

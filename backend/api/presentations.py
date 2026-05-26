@@ -3,17 +3,24 @@ Presentation Management Endpoints
 - Upload documents
 - List/view/edit/delete presentations
 - Track views and engagement analytics
+- Generate AI presentation from document
+- Q&A tutor mode
 """
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, Body, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.api.auth import _get_current_user
 from backend.db.database import get_db
+from backend.services.agentic_pipeline import (
+    extract_text_from_file,
+    generate_slides_from_content,
+    answer_question,
+)
 
 router = APIRouter()
 
@@ -263,4 +270,124 @@ async def delete_presentation(presentation_id: str, current_user=Depends(_get_cu
         os.remove(file_path)
 
     return {"status": "success", "message": f"Presentation '{removed['title']}' deleted"}
+
+
+# ==================== GENERATE PRESENTATION ====================
+
+class GenerateRequest(BaseModel):
+    avatar_id: Optional[str] = None
+    voice_id: Optional[str] = None
+
+
+@router.post("/{presentation_id}/generate")
+async def generate_presentation(
+    presentation_id: str,
+    req: GenerateRequest = Body(default=GenerateRequest()),
+    current_user=Depends(_get_current_user)
+):
+    """
+    Generate AI presentation from uploaded document.
+    Analyzes document, extracts content, creates slides, assigns avatar & voice.
+    """
+    user_id = getattr(current_user, "id", "anonymous")
+    presentation = _find_presentation(user_id, presentation_id)
+    if not presentation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Presentation not found")
+
+    # Update avatar/voice if provided
+    if req.avatar_id:
+        presentation["avatar_id"] = req.avatar_id
+    if req.voice_id:
+        presentation["voice_id"] = req.voice_id
+
+    # Set status to processing
+    presentation["status"] = "processing"
+    presentation["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Extract text from the uploaded file
+    uploads_dir = os.path.join(os.path.dirname(__file__), '../../uploads')
+    file_path = os.path.join(uploads_dir, f"user_{user_id}", presentation["filename"])
+
+    document_text = ""
+    if os.path.exists(file_path):
+        try:
+            document_text = extract_text_from_file(file_path)
+        except Exception:
+            document_text = ""
+
+    # Store extracted text for Q&A later
+    presentation["_document_text"] = document_text
+
+    # Generate slides from content
+    slides = generate_slides_from_content(document_text, presentation["title"])
+    presentation["slides"] = slides
+    presentation["status"] = "ready"
+    presentation["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    return {
+        "status": "success",
+        "message": "Presentation generated successfully",
+        "presentation": {
+            "id": presentation["id"],
+            "title": presentation["title"],
+            "status": presentation["status"],
+            "slides": slides,
+            "total_slides": len(slides),
+            "avatar_id": presentation["avatar_id"],
+            "voice_id": presentation["voice_id"],
+        }
+    }
+
+
+# ==================== Q&A TUTOR MODE ====================
+
+class AskRequest(BaseModel):
+    question: str
+    chat_history: Optional[List[dict]] = None
+
+
+@router.post("/{presentation_id}/ask")
+async def ask_question_endpoint(
+    presentation_id: str,
+    req: AskRequest = Body(...),
+    current_user=Depends(_get_current_user)
+):
+    """
+    Ask the AI tutor a question about the presentation content.
+    The avatar acts as an expert on the uploaded document.
+    """
+    user_id = getattr(current_user, "id", "anonymous")
+    presentation = _find_presentation(user_id, presentation_id)
+    if not presentation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Presentation not found")
+
+    if not req.question or not req.question.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question cannot be empty")
+
+    # Get stored document text (or re-extract if needed)
+    document_text = presentation.get("_document_text", "")
+    if not document_text:
+        uploads_dir = os.path.join(os.path.dirname(__file__), '../../uploads')
+        file_path = os.path.join(uploads_dir, f"user_{user_id}", presentation["filename"])
+        if os.path.exists(file_path):
+            try:
+                document_text = extract_text_from_file(file_path)
+                presentation["_document_text"] = document_text
+            except Exception:
+                pass
+
+    # Get answer from the pipeline
+    answer = answer_question(
+        document_text=document_text,
+        question=req.question.strip(),
+        presentation_title=presentation["title"],
+        chat_history=req.chat_history
+    )
+
+    return {
+        "status": "success",
+        "answer": answer,
+        "presentation_id": presentation_id,
+        "avatar_id": presentation.get("avatar_id"),
+    }
 

@@ -769,10 +769,17 @@ function generateSlides(presentation) {
 function openViewer(presentation) {
   if (!presentation) return;
   viewer.presentation = presentation;
-  viewer.slides = generateSlides(presentation);
+  // Use generated slides if available, otherwise generate placeholders
+  viewer.slides = (presentation.slides && presentation.slides.length) ? presentation.slides : generateSlides(presentation);
   viewer.currentSlide = 0;
   viewer.elapsed = 0;
   viewer.isPlaying = false;
+
+  // Reset Q&A
+  qaState.chatHistory = [];
+  const qaMessages = document.getElementById('qaMessages');
+  qaMessages.innerHTML = '<div class="qa-msg assistant">Hi! I\'m your AI tutor for this presentation. Ask me anything about the content — I\'ll explain it clearly.</div>';
+  document.getElementById('viewerQA').classList.remove('active');
 
   // Resolve avatar
   const avatarId = presentation.avatar_id;
@@ -946,6 +953,236 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+// ==================== GENERATE PANEL ====================
+let generateState = {
+  presentationId: null,
+  isGenerating: false,
+};
+
+function openGeneratePanel() {
+  const panel = document.getElementById('generatePanel');
+  panel.classList.add('active');
+  document.body.style.overflow = 'hidden';
+
+  // Get the latest uploaded presentation
+  const latestPres = presData.presentations[0];
+  if (latestPres) {
+    generateState.presentationId = latestPres.id;
+    document.getElementById('genDocName').textContent = latestPres.title || latestPres.filename;
+  }
+
+  // Show selected avatar
+  const avatarId = avatarData.selectedId;
+  if (avatarId && avatarData.avatars.length) {
+    const avatar = avatarData.avatars.find(a => a.id === avatarId);
+    if (avatar) document.getElementById('genAvatarName').textContent = avatar.name;
+  }
+
+  // Show selected voice
+  const voiceId = voiceData.selectedId;
+  if (voiceId && voiceData.voices.length) {
+    const voice = voiceData.voices.find(v => v.id === voiceId);
+    if (voice) document.getElementById('genVoiceName').textContent = voice.name;
+  }
+
+  // Reset progress
+  document.getElementById('genProgress').classList.remove('active');
+  for (let i = 1; i <= 5; i++) {
+    const step = document.getElementById(`genStep${i}`);
+    step.classList.remove('active', 'done');
+    step.querySelector('.gen-step-icon').textContent = '○';
+  }
+  document.getElementById('generateBtn').disabled = false;
+  document.getElementById('generateBtn').textContent = '✨ Generate Presentation';
+}
+
+function closeGeneratePanel() {
+  document.getElementById('generatePanel').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+async function startGeneration() {
+  if (generateState.isGenerating) return;
+  generateState.isGenerating = true;
+
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+
+  const progress = document.getElementById('genProgress');
+  progress.classList.add('active');
+
+  // Animate steps
+  const steps = ['genStep1', 'genStep2', 'genStep3', 'genStep4', 'genStep5'];
+  let currentStep = 0;
+
+  function advanceStep() {
+    if (currentStep > 0) {
+      const prev = document.getElementById(steps[currentStep - 1]);
+      prev.classList.remove('active');
+      prev.classList.add('done');
+      prev.querySelector('.gen-step-icon').textContent = '✓';
+    }
+    if (currentStep < steps.length) {
+      const cur = document.getElementById(steps[currentStep]);
+      cur.classList.add('active');
+      cur.querySelector('.gen-step-icon').textContent = '◉';
+      currentStep++;
+    }
+  }
+
+  advanceStep(); // Step 1: Extracting
+
+  // Call the generate API
+  const presId = generateState.presentationId;
+  if (!presId) {
+    showToast('No presentation to generate', 'error');
+    generateState.isGenerating = false;
+    btn.disabled = false;
+    btn.textContent = '✨ Generate Presentation';
+    return;
+  }
+
+  // Simulate progress steps with timing
+  const stepTimer = setInterval(() => {
+    if (currentStep < steps.length) advanceStep();
+  }, 1500);
+
+  try {
+    const res = await apiRequest(`/presentations/${presId}/generate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        avatar_id: avatarData.selectedId || null,
+        voice_id: voiceData.selectedId || null
+      })
+    });
+
+    clearInterval(stepTimer);
+    // Mark all steps done
+    for (let i = 0; i < steps.length; i++) {
+      const step = document.getElementById(steps[i]);
+      step.classList.remove('active');
+      step.classList.add('done');
+      step.querySelector('.gen-step-icon').textContent = '✓';
+    }
+
+    if (res && res.status === 'success') {
+      // Store generated slides in the presentation
+      const pres = presData.presentations.find(p => p.id === presId);
+      if (pres) {
+        pres.slides = res.presentation.slides;
+        pres.status = 'ready';
+        pres.avatar_id = res.presentation.avatar_id;
+        pres.voice_id = res.presentation.voice_id;
+      }
+
+      btn.textContent = '✅ Generated! Opening Viewer...';
+      showToast('Presentation generated! Your AI avatar is ready to present.', 'success');
+
+      // Refresh presentations list
+      loadPresentations();
+
+      // Open viewer after a short delay
+      setTimeout(() => {
+        closeGeneratePanel();
+        generateState.isGenerating = false;
+        if (pres) openViewer(pres);
+      }, 1500);
+    } else {
+      throw new Error('Generation failed');
+    }
+  } catch (err) {
+    clearInterval(stepTimer);
+    btn.disabled = false;
+    btn.textContent = '✨ Retry Generation';
+    generateState.isGenerating = false;
+    showToast(err.message || 'Generation failed. Please try again.', 'error');
+  }
+}
+
+// ==================== Q&A CHAT ====================
+let qaState = {
+  chatHistory: [],
+  isAsking: false,
+};
+
+function toggleQAPanel() {
+  const panel = document.getElementById('viewerQA');
+  panel.classList.toggle('active');
+  if (panel.classList.contains('active')) {
+    document.getElementById('qaInput').focus();
+  }
+}
+
+async function sendQuestion() {
+  const input = document.getElementById('qaInput');
+  const question = input.value.trim();
+  if (!question || qaState.isAsking) return;
+
+  qaState.isAsking = true;
+  input.value = '';
+  document.getElementById('qaSendBtn').disabled = true;
+
+  // Add user message to chat
+  addQAMessage(question, 'user');
+  qaState.chatHistory.push({ role: 'user', content: question });
+
+  // Show typing indicator
+  const typingId = addQAMessage('Thinking...', 'assistant typing');
+
+  // Get presentation ID
+  const presId = viewer.presentation?.id;
+  if (!presId) {
+    removeQAMessage(typingId);
+    addQAMessage("I couldn't find the presentation context. Please try again.", 'assistant');
+    qaState.isAsking = false;
+    document.getElementById('qaSendBtn').disabled = false;
+    return;
+  }
+
+  try {
+    const res = await apiRequest(`/presentations/${presId}/ask`, {
+      method: 'POST',
+      body: JSON.stringify({
+        question: question,
+        chat_history: qaState.chatHistory.slice(-6)
+      })
+    });
+
+    removeQAMessage(typingId);
+
+    if (res && res.answer) {
+      addQAMessage(res.answer, 'assistant');
+      qaState.chatHistory.push({ role: 'assistant', content: res.answer });
+    } else {
+      addQAMessage("I'm sorry, I couldn't process that question. Please try again.", 'assistant');
+    }
+  } catch (err) {
+    removeQAMessage(typingId);
+    addQAMessage("Sorry, I'm having trouble answering right now. Please try again.", 'assistant');
+  }
+
+  qaState.isAsking = false;
+  document.getElementById('qaSendBtn').disabled = false;
+}
+
+function addQAMessage(text, className) {
+  const container = document.getElementById('qaMessages');
+  const msgId = 'qa-msg-' + Date.now();
+  const div = document.createElement('div');
+  div.className = `qa-msg ${className}`;
+  div.id = msgId;
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return msgId;
+}
+
+function removeQAMessage(msgId) {
+  const el = document.getElementById(msgId);
+  if (el) el.remove();
+}
+
 // ==================== API HELPER ====================
 function extractErrorMessage(data, fallback) {
   if (!data || !data.detail) return fallback;
@@ -1051,6 +1288,7 @@ document.addEventListener('keydown', (e) => {
     closeAvatarPanel();
     closeVoicePanel();
     closePresPanel();
+    if (document.getElementById('generatePanel')?.classList.contains('active')) closeGeneratePanel();
     if (document.getElementById('presentationViewer')?.classList.contains('active')) closeViewer();
   }
   // Arrow keys for slide navigation when viewer is open
@@ -1267,7 +1505,9 @@ function confirmVoiceSelection() {
   if (!voiceData.selectedId) return;
   const voice = voiceData.voices.find(v => v.id === voiceData.selectedId);
   closeVoicePanel();
-  showToast(`Voice "${voice.name}" selected! Your presentation is ready to generate.`, 'success');
+  showToast(`Voice "${voice.name}" selected!`, 'success');
+  // Open generate panel next
+  setTimeout(() => openGeneratePanel(), 400);
 }
 
 // ==================== DASHBOARD CARD CLICK HANDLERS ====================
