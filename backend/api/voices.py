@@ -188,7 +188,6 @@ async def list_voices(
     gender: Optional[str] = Query(None, description="Filter by gender"),
     provider: Optional[str] = Query(None, description="Filter by provider (elevenlabs, google-tts, azure-tts)"),
     style: Optional[str] = Query(None, description="Filter by style (narration, professional, conversational, etc.)"),
-    current_user=Depends(_get_current_user)
 ):
     """Get list of available voices with optional filtering"""
     voices = AVAILABLE_VOICES
@@ -209,7 +208,7 @@ async def list_voices(
 
 
 @router.get("/languages")
-async def get_supported_languages(current_user=Depends(_get_current_user)):
+async def get_supported_languages():
     """Get list of all supported languages"""
     return {
         "languages": [{"code": code, "name": name} for code, name in SUPPORTED_LANGUAGES],
@@ -218,7 +217,7 @@ async def get_supported_languages(current_user=Depends(_get_current_user)):
 
 
 @router.get("/{voice_id}")
-async def get_voice(voice_id: str, current_user=Depends(_get_current_user)):
+async def get_voice(voice_id: str):
     """Get specific voice details"""
     voice = next((v for v in AVAILABLE_VOICES if v["id"] == voice_id), None)
     if not voice:

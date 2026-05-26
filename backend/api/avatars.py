@@ -98,7 +98,6 @@ AVATAR_CATEGORIES = [
 async def list_avatars(
     category: Optional[str] = Query(None, description="Filter by category"),
     gender: Optional[str] = Query(None, description="Filter by gender"),
-    current_user=Depends(_get_current_user)
 ):
     """Get list of 52 professional AI avatars with optional filtering"""
     avatars = AVAILABLE_AVATARS
@@ -114,7 +113,7 @@ async def list_avatars(
 
 
 @router.get("/{avatar_id}")
-async def get_avatar(avatar_id: str, current_user=Depends(_get_current_user)):
+async def get_avatar(avatar_id: str):
     """Get specific avatar details"""
     avatar = next((a for a in AVAILABLE_AVATARS if a["id"] == avatar_id), None)
     if not avatar:
