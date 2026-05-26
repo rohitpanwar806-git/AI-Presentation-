@@ -389,6 +389,7 @@ function showDashboard() {
   document.getElementById('dashboard').classList.add('active');
   document.getElementById('helpCentre')?.classList.remove('active');
   document.getElementById('accountSettings')?.classList.remove('active');
+  document.getElementById('adminPanel')?.classList.remove('active');
   
   // Update nav with profile dropdown
   document.getElementById('navLinks').style.display = 'none';
@@ -430,6 +431,7 @@ function showLanding() {
   document.getElementById('dashboard').classList.remove('active');
   document.getElementById('helpCentre')?.classList.remove('active');
   document.getElementById('accountSettings')?.classList.remove('active');
+  document.getElementById('adminPanel')?.classList.remove('active');
   document.getElementById('navLinks').style.display = '';
   document.getElementById('navActions').innerHTML = `
     <button class="btn btn-ghost" onclick="openAuth('signin')">Log In</button>
@@ -453,6 +455,7 @@ async function openHelpCentre() {
   document.getElementById('landing').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('active');
   document.getElementById('accountSettings')?.classList.remove('active');
+  document.getElementById('adminPanel')?.classList.remove('active');
   document.getElementById('helpCentre').classList.add('active');
   loadMyTickets();
 }
@@ -501,6 +504,7 @@ async function openAccountSettings() {
   document.getElementById('landing').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('active');
   document.getElementById('helpCentre')?.classList.remove('active');
+  document.getElementById('adminPanel')?.classList.remove('active');
   document.getElementById('accountSettings').classList.add('active');
   populateAccountSettings();
 }

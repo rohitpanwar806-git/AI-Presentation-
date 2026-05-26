@@ -686,6 +686,10 @@ body {
 
 .form-input::placeholder { color: var(--text-muted); }
 
+/* Global select dropdown option styling for dark theme */
+select { background: #1e1e2e; color: #fff; }
+select option { background: #1e1e2e; color: #fff; }
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1782,6 +1786,7 @@ body {
   border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
   color: #fff; font-size: 14px; outline: none; transition: border-color 0.2s;
 }
+.form-group select option, select option { background: #1e1e2e; color: #fff; }
 .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
   border-color: #6366f1;
 }
