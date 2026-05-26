@@ -43,10 +43,62 @@ const tts = {
     const premium = candidates.filter(v => !v.localService || premiumKeywords.some(k => v.name.toLowerCase().includes(k)));
     if (premium.length) candidates = premium;
 
-    // Filter by gender heuristic
+    // Filter by gender heuristic — extended with non-English voice names
     if (gender && candidates.length > 1) {
-      const femaleHints = ['female', 'woman', 'zira', 'hazel', 'susan', 'karen', 'samantha', 'victoria', 'fiona', 'jenny', 'aria', 'sara', 'elsa', 'clara', 'emma', 'eva'];
-      const maleHints = ['male', 'man', 'david', 'mark', 'james', 'daniel', 'george', 'alex', 'guy', 'ryan', 'eric', 'brian', 'roger'];
+      const femaleHints = ['female', 'woman', 'zira', 'hazel', 'susan', 'karen', 'samantha', 'victoria', 'fiona', 'jenny', 'aria', 'sara', 'elsa', 'clara', 'emma', 'eva',
+        // Hindi
+        'swara', 'kavya', 'neerja', 'priya', 'ananya', 'isha', 'aditi', 'lekha', 'hemant',
+        // Japanese
+        'nanami', 'aoi', 'haruka', 'ayumi', 'keiko', 'sayaka',
+        // Korean
+        'sunhi', 'yujin', 'soonbok', 'jimin',
+        // Chinese
+        'xiaoxiao', 'xiaoyi', 'xiaomo', 'xiaorui', 'huihui',
+        // German
+        'katja', 'amala', 'hedda',
+        // French
+        'denise', 'sylvie', 'hortense',
+        // Spanish
+        'elvira', 'dalia', 'lucia',
+        // Arabic
+        'zariyah', 'hoda', 'salma',
+        // Portuguese
+        'francisca', 'raquel', 'fernanda',
+        // Italian
+        'cosimo', 'isabella',
+        // Russian
+        'svetlana', 'irina', 'dariya',
+        // Turkish
+        'emel',
+        // Generic patterns
+        'fem', 'girl', 'she'];
+      const maleHints = ['male', 'man', 'david', 'mark', 'james', 'daniel', 'george', 'alex', 'guy', 'ryan', 'eric', 'brian', 'roger',
+        // Hindi
+        'madhur', 'prabhat', 'ravi', 'kiran', 'hemant',
+        // Japanese
+        'keita', 'takumi', 'ichiro', 'naoki',
+        // Korean
+        'injoon', 'hyunsu', 'bongJin',
+        // Chinese
+        'yunxi', 'yunyang', 'kangkang',
+        // German
+        'conrad', 'stefan', 'karsten',
+        // French
+        'henri', 'claude', 'paul',
+        // Spanish
+        'alvaro', 'jorge', 'pablo',
+        // Arabic
+        'hamed', 'omar', 'tarik',
+        // Portuguese
+        'antonio', 'daniel',
+        // Italian
+        'diego', 'cosimo',
+        // Russian
+        'dmitry', 'pavel',
+        // Turkish
+        'ahmet',
+        // Generic patterns
+        'boy', 'he'];
       const hints = gender === 'female' ? femaleHints : maleHints;
       const genderMatch = candidates.filter(v => hints.some(h => v.name.toLowerCase().includes(h)));
       if (genderMatch.length) candidates = genderMatch;
@@ -1817,11 +1869,10 @@ async function openQuizPanel() {
   try {
     let res;
     if (pres._shared && pres._share_token) {
-      // Generate quiz for shared viewers via public Q&A (ask for quiz)
-      res = await fetch(`${API_BASE}/shared/${pres._share_token}/ask`, {
+      // Use dedicated shared quiz endpoint
+      res = await fetch(`${API_BASE}/shared/${pres._share_token}/quiz`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: '__generate_quiz__', chat_history: [] })
+        headers: { 'Content-Type': 'application/json' }
       });
     } else {
       res = await fetch(`${API_BASE}/presentations/${pres.id}/quiz`, {
@@ -2066,9 +2117,14 @@ async function openSummaryPanel() {
   document.getElementById('summaryContent').innerHTML = '<div style="text-align:center;padding:40px;"><div class="loading-spinner"></div><p>Analyzing document...</p></div>';
 
   try {
-    const res = await fetch(`${API_BASE}/presentations/${pres.id}/summary`, {
-      headers: { 'Authorization': `Bearer ${state.token}` }
-    });
+    let res;
+    if (pres._shared && pres._share_token) {
+      res = await fetch(`${API_BASE}/shared/${pres._share_token}/summary`);
+    } else {
+      res = await fetch(`${API_BASE}/presentations/${pres.id}/summary`, {
+        headers: { 'Authorization': `Bearer ${state.token}` }
+      });
+    }
     const data = await res.json();
     if (data.summary) renderSummary(data.summary);
     else document.getElementById('summaryContent').innerHTML = '<p style="padding:24px;color:var(--text-secondary);">Summary unavailable.</p>';
@@ -2114,7 +2170,8 @@ async function openSharedViewer(token) {
   sharedChatHistory = [];
 
   // Hide the dashboard, show a loading state
-  document.getElementById('dashboardContent').style.display = 'none';
+  const dashEl = document.getElementById('dashboard');
+  if (dashEl) dashEl.style.display = 'none';
   document.querySelector('.navbar')?.style.setProperty('display', 'none');
 
   try {

@@ -141,7 +141,7 @@ def find_relevant_chunks(query: str, chunks: list, top_k: int = 5) -> list:
 
 def generate_summary(document_text: str, title: str) -> dict:
     """Generate an executive summary with key points from the document."""
-    if (HAS_GEMINI or HAS_ANTHROPIC) and document_text.strip():
+    if HAS_LLM and document_text.strip():
         result = _summary_with_llm(document_text, title)
         if result:
             return result
@@ -213,7 +213,7 @@ def _extract_topics(text: str) -> list:
 
 def generate_quiz(document_text: str, title: str, num_questions: int = 5) -> list:
     """Generate quiz questions from document content."""
-    if (HAS_GEMINI or HAS_ANTHROPIC) and document_text.strip():
+    if HAS_LLM and document_text.strip():
         result = _quiz_with_llm(document_text, title, num_questions)
         if result:
             return result
@@ -299,7 +299,7 @@ def _quiz_heuristic(document_text: str, title: str, num_questions: int) -> list:
 
 def generate_script_from_slides(slides: list, style: str = "professional") -> list:
     """Generate narration scripts for each slide."""
-    if (HAS_GEMINI or HAS_ANTHROPIC) and slides:
+    if HAS_LLM and slides:
         result = _script_with_llm(slides, style)
         if result:
             return result

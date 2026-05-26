@@ -1497,16 +1497,17 @@ select option { background: #1e1e2e; color: #fff; }
 .viewer-title span { font-size: 12px; color: rgba(255,255,255,0.5); margin-left: 12px; }
 .viewer-topbar-actions { display: flex; gap: 8px; }
 .viewer-topbar-btn {
-  padding: 6px 14px;
+  padding: 7px 16px;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.08);
   color: #fff;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
+  backdrop-filter: blur(6px);
 }
-.viewer-topbar-btn:hover { background: rgba(255,255,255,0.12); }
+.viewer-topbar-btn:hover { background: rgba(99,102,241,0.25); border-color: rgba(99,102,241,0.4); }
 
 .viewer-stage {
   flex: 1;
@@ -1706,8 +1707,8 @@ select option { background: #1e1e2e; color: #fff; }
 .ctrl-btn {
   width: 40px; height: 40px;
   border-radius: 50%;
-  border: none;
-  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08);
   color: #fff;
   font-size: 16px;
   cursor: pointer;
@@ -1715,14 +1716,17 @@ select option { background: #1e1e2e; color: #fff; }
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  backdrop-filter: blur(8px);
 }
-.ctrl-btn:hover { background: rgba(255,255,255,0.2); }
+.ctrl-btn:hover { background: rgba(99,102,241,0.3); border-color: rgba(99,102,241,0.5); transform: scale(1.08); }
 .ctrl-btn.play-btn {
-  width: 48px; height: 48px;
+  width: 52px; height: 52px;
   background: var(--accent);
-  font-size: 18px;
+  font-size: 20px;
+  border: 2px solid rgba(255,255,255,0.2);
+  box-shadow: 0 0 20px rgba(99,102,241,0.3);
 }
-.ctrl-btn.play-btn:hover { background: var(--accent-dark, #5a4de6); transform: scale(1.05); }
+.ctrl-btn.play-btn:hover { background: var(--accent-dark, #5a4de6); transform: scale(1.1); box-shadow: 0 0 30px rgba(99,102,241,0.5); }
 .viewer-time { font-size: 13px; color: rgba(255,255,255,0.5); font-variant-numeric: tabular-nums; }
 .controls-center { display: flex; align-items: center; gap: 16px; }
 .slide-nav-info { font-size: 13px; color: rgba(255,255,255,0.5); }

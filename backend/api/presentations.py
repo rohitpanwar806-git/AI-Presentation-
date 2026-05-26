@@ -571,6 +571,8 @@ async def get_shared_presentation(share_token: str, db: Session = Depends(get_db
         "total_slides": len(d["slides"]),
         "created_at": d["created_at"],
         "has_qa": bool(pres.document_text),
+        "quiz": d.get("quiz"),
+        "summary": d.get("summary"),
     }
 
 
@@ -596,6 +598,45 @@ async def shared_ask_question(share_token: str, req: AskRequest = Body(...), db:
     )
 
     return {"status": "success", "answer": answer}
+
+
+@router.post("/shared/{share_token}/quiz")
+async def shared_quiz_endpoint(share_token: str, db: Session = Depends(get_db)):
+    """Generate quiz for shared presentations (no auth required)."""
+    pres = _get_db_presentation_by_token(db, share_token)
+    if not pres:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found")
+    if pres.share_expires_at and datetime.now(timezone.utc) > pres.share_expires_at:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Link expired")
+
+    # Return cached quiz if available
+    if pres.quiz_json:
+        return {"status": "success", "quiz": json.loads(pres.quiz_json)}
+
+    document_text = pres.document_text or ""
+    questions = generate_quiz(document_text, pres.title, 5)
+    pres.quiz_json = json.dumps(questions)
+    db.commit()
+    return {"status": "success", "quiz": questions, "total_questions": len(questions)}
+
+
+@router.get("/shared/{share_token}/summary")
+async def shared_summary_endpoint(share_token: str, db: Session = Depends(get_db)):
+    """Get summary for shared presentations (no auth required)."""
+    pres = _get_db_presentation_by_token(db, share_token)
+    if not pres:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found")
+    if pres.share_expires_at and datetime.now(timezone.utc) > pres.share_expires_at:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Link expired")
+
+    if pres.summary_json:
+        return {"status": "success", "summary": json.loads(pres.summary_json)}
+
+    document_text = pres.document_text or ""
+    summary = generate_summary(document_text, pres.title)
+    pres.summary_json = json.dumps(summary)
+    db.commit()
+    return {"status": "success", "summary": summary}
 
 
 # ==================== QUIZ GENERATION ====================
