@@ -33,6 +33,22 @@ class RegisterRequest(BaseModel):
 	gender: str = Field(min_length=1, max_length=30)
 	email: EmailStr
 	password: str = Field(min_length=8, max_length=128)
+	privacy_consent: bool = Field(default=False)
+
+	@staticmethod
+	def validate_password_strength(password: str) -> str | None:
+		"""Returns error message if password is weak, None if strong."""
+		if len(password) < 8:
+			return "Password must be at least 8 characters"
+		if not any(c.isupper() for c in password):
+			return "Password must contain at least one uppercase letter"
+		if not any(c.islower() for c in password):
+			return "Password must contain at least one lowercase letter"
+		if not any(c.isdigit() for c in password):
+			return "Password must contain at least one digit"
+		if not any(c in "!@#$%^&*()_+-=[]{}|;:',.<>?/`~" for c in password):
+			return "Password must contain at least one special character"
+		return None
 
 
 class VerifyEmailRequest(BaseModel):
@@ -262,6 +278,15 @@ async def google_client_id() -> dict[str, Any]:
 @router.post("/register")
 @limiter.limit("5/minute")
 async def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+	# DPDP Act: require explicit privacy consent
+	if not payload.privacy_consent:
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You must accept the Privacy Policy to register")
+
+	# Enforce strong password
+	pw_error = RegisterRequest.validate_password_strength(payload.password)
+	if pw_error:
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=pw_error)
+
 	email = str(payload.email).strip().lower()
 	existing = db.query(User).filter(User.email == email).first()
 
@@ -293,6 +318,8 @@ async def register(request: Request, payload: RegisterRequest, db: Session = Dep
 			is_admin=(config.ADMIN_EMAIL == email),
 			verification_code=code,
 			verification_expires_at=expires_at,
+			privacy_consent=True,
+			privacy_consent_at=datetime.now(timezone.utc),
 		)
 		db.add(user)
 
@@ -344,7 +371,8 @@ async def resend_code(request: Request, payload: ResendCodeRequest, db: Session 
 
 
 @router.post("/verify-email")
-async def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+@limiter.limit("10/minute")
+async def verify_email(request: Request, payload: VerifyEmailRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
 	email = str(payload.email).strip().lower()
 	user = db.query(User).filter(User.email == email).first()
 	if not user:
@@ -389,12 +417,37 @@ async def login(request: Request, payload: LoginRequest, db: Session = Depends(g
 		raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 	if not user.is_active:
 		raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
+
+	# Account lockout check
+	now = datetime.now(timezone.utc)
+	if user.locked_until and user.locked_until > now:
+		remaining = int((user.locked_until - now).total_seconds() / 60) + 1
+		raise HTTPException(
+			status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+			detail=f"Account temporarily locked due to too many failed attempts. Try again in {remaining} minutes.",
+		)
+
 	if not verify_password(payload.password, user.password_hash):
+		# Increment failed attempts
+		user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+		if user.failed_login_attempts >= config.MAX_LOGIN_ATTEMPTS:
+			user.locked_until = now + timedelta(minutes=config.LOGIN_LOCKOUT_MINUTES)
+			user.failed_login_attempts = 0
+			db.commit()
+			raise HTTPException(
+				status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+				detail=f"Account locked for {config.LOGIN_LOCKOUT_MINUTES} minutes due to too many failed attempts.",
+			)
+		db.commit()
 		raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
 	if not user.is_verified:
 		raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email first")
 
-	user.last_login_at = datetime.now(timezone.utc)
+	# Reset failed attempts on successful login
+	user.failed_login_attempts = 0
+	user.locked_until = None
+	user.last_login_at = now
 	db.commit()
 	db.refresh(user)
 
@@ -486,6 +539,100 @@ async def update_profile(
 	db.commit()
 	db.refresh(current_user)
 	return _serialize_user(current_user)
+
+
+# ==================== DPDP ACT 2023 COMPLIANCE ====================
+
+@router.get("/privacy/my-data")
+async def export_my_data(
+	current_user: User = Depends(_get_current_user),
+	db: Session = Depends(get_db),
+) -> dict[str, Any]:
+	"""DPDP Act Section 11: Right to access personal data. Export all user data."""
+	from backend.db.models import Presentation, SupportTicket
+
+	# Gather all user data
+	presentations = db.query(Presentation).filter(Presentation.user_id == current_user.id).all()
+	tickets = db.query(SupportTicket).filter(SupportTicket.user_id == current_user.id).all()
+
+	return {
+		"personal_info": {
+			"email": current_user.email,
+			"first_name": current_user.first_name,
+			"last_name": current_user.last_name,
+			"gender": current_user.gender,
+			"bio": current_user.bio,
+			"login_provider": current_user.login_provider,
+			"created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+			"last_login_at": current_user.last_login_at.isoformat() if current_user.last_login_at else None,
+			"privacy_consent": current_user.privacy_consent,
+			"privacy_consent_at": current_user.privacy_consent_at.isoformat() if current_user.privacy_consent_at else None,
+		},
+		"presentations": [
+			{"title": p.title, "filename": p.filename, "created_at": p.created_at.isoformat() if p.created_at else None}
+			for p in presentations
+		],
+		"support_tickets": [
+			{"subject": t.subject, "category": t.category, "status": t.status, "created_at": t.created_at.isoformat() if t.created_at else None}
+			for t in tickets
+		],
+		"data_export_date": datetime.now(timezone.utc).isoformat(),
+		"note": "This export contains all personal data stored by PresenterAI as required under India's Digital Personal Data Protection Act 2023.",
+	}
+
+
+@router.post("/privacy/delete-account")
+async def request_account_deletion(
+	current_user: User = Depends(_get_current_user),
+	db: Session = Depends(get_db),
+) -> dict[str, Any]:
+	"""DPDP Act Section 12: Right to erasure. Request account and data deletion."""
+	from backend.db.models import Presentation, SupportTicket
+
+	# Delete all user presentations
+	db.query(Presentation).filter(Presentation.user_id == current_user.id).delete()
+	# Delete all user tickets
+	db.query(SupportTicket).filter(SupportTicket.user_id == current_user.id).delete()
+	# Delete the user account
+	db.delete(current_user)
+	db.commit()
+
+	return {
+		"status": "deleted",
+		"message": "Your account and all associated data have been permanently deleted as per DPDP Act 2023.",
+	}
+
+
+@router.get("/privacy/policy")
+async def privacy_policy() -> dict[str, Any]:
+	"""Return privacy policy summary for DPDP Act compliance."""
+	return {
+		"policy_version": "1.0",
+		"effective_date": "2026-05-26",
+		"data_fiduciary": "PresenterAI",
+		"data_collected": [
+			"Email address (for authentication)",
+			"Name and gender (for personalization)",
+			"Uploaded documents (for presentation generation)",
+			"Usage analytics (presentations viewed, created)",
+		],
+		"purpose": [
+			"User authentication and account management",
+			"AI-powered presentation generation from uploaded documents",
+			"Voice synthesis and avatar rendering",
+			"Customer support via help centre",
+		],
+		"data_retention": "Data is retained until you delete your account or request erasure",
+		"data_sharing": "We do not sell or share personal data with third parties except for essential service providers (Google Cloud, ElevenLabs for voice synthesis)",
+		"user_rights": [
+			"Right to access your data (GET /auth/privacy/my-data)",
+			"Right to erasure / deletion (POST /auth/privacy/delete-account)",
+			"Right to withdraw consent at any time",
+			"Right to lodge a grievance",
+		],
+		"grievance_officer": "Contact us via the Help Centre or email the support address",
+		"applicable_law": "Digital Personal Data Protection Act, 2023 (India)",
+	}
 
 
 @router.get("/admin/users")

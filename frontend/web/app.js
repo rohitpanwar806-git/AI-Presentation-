@@ -275,6 +275,10 @@ function switchTab(tab) {
     title.textContent = 'Welcome back';
     subtitle.textContent = 'Sign in to your account to continue';
     btnText.textContent = 'Sign In';
+    const privacyField = document.getElementById('privacyConsentField');
+    if (privacyField) privacyField.style.display = 'none';
+    const pwStrength = document.getElementById('passwordStrength');
+    if (pwStrength) pwStrength.style.display = 'none';
   } else {
     tabSignin.classList.remove('active');
     tabSignup.classList.add('active');
@@ -283,6 +287,10 @@ function switchTab(tab) {
     title.textContent = 'Create your account';
     subtitle.textContent = 'Start creating AI presentations for free';
     btnText.textContent = 'Create Account';
+    const privacyField = document.getElementById('privacyConsentField');
+    if (privacyField) privacyField.style.display = 'block';
+    const pwStrength = document.getElementById('passwordStrength');
+    if (pwStrength) pwStrength.style.display = 'block';
   }
 }
 
@@ -301,6 +309,16 @@ async function handleAuth(event) {
   if (password.length < 8) {
     showAuthError('Password must be at least 8 characters');
     return;
+  }
+
+  // Validate password strength for signup
+  if (state.currentTab === 'signup') {
+    const pwErr = validatePasswordStrength(password);
+    if (pwErr) { showAuthError(pwErr); return; }
+    if (!document.getElementById('privacyConsent')?.checked) {
+      showAuthError('You must accept the Privacy Policy to create an account');
+      return;
+    }
   }
 
   setAuthLoading(true);
@@ -352,7 +370,8 @@ async function register(email, password) {
       password,
       first_name: firstName,
       last_name: lastName,
-      gender: gender || 'other'
+      gender: gender || 'other',
+      privacy_consent: true
     })
   });
 
@@ -643,8 +662,8 @@ async function loadAdminUsers() {
     const container = document.getElementById('adminUsersList');
     container.innerHTML = (resp.items || []).map(u => `
       <tr>
-        <td>${u.name}</td>
-        <td>${u.email}</td>
+        <td>${escapeHtml(u.name || '')}</td>
+        <td>${escapeHtml(u.email || '')}</td>
         <td><span class="badge ${u.is_verified ? 'badge-success' : 'badge-warning'}">${u.is_verified ? 'Verified' : 'Pending'}</span></td>
         <td>${u.is_admin ? '⭐ Admin' : 'User'}</td>
         <td>${new Date(u.created_at).toLocaleDateString()}</td>
@@ -662,16 +681,16 @@ async function loadAdminTickets() {
     container.innerHTML = (resp.items || []).map(t => `
       <div class="admin-ticket">
         <div class="admin-ticket-header">
-          <span class="ticket-category">${t.category}</span>
-          <span class="ticket-status status-${t.status}">${t.status}</span>
+          <span class="ticket-category">${escapeHtml(t.category || '')}</span>
+          <span class="ticket-status status-${escapeHtml(t.status || '')}">${escapeHtml(t.status || '')}</span>
           <span class="ticket-date">${new Date(t.created_at).toLocaleDateString()}</span>
         </div>
-        <h4>${t.subject}</h4>
-        <p style="color:#94a3b8;font-size:12px">From: ${t.user_email}</p>
-        <p>${t.description}</p>
-        ${t.admin_reply ? `<div class="ticket-reply"><strong>Your Reply:</strong> ${t.admin_reply}</div>` : ''}
+        <h4>${escapeHtml(t.subject || '')}</h4>
+        <p style="color:#94a3b8;font-size:12px">From: ${escapeHtml(t.user_email || '')}</p>
+        <p>${escapeHtml(t.description || '')}</p>
+        ${t.admin_reply ? `<div class="ticket-reply"><strong>Your Reply:</strong> ${escapeHtml(t.admin_reply)}</div>` : ''}
         ${t.status === 'open' ? `
-          <form onsubmit="replyToTicket(event, ${t.id})" class="ticket-reply-form">
+          <form onsubmit="replyToTicket(event, ${parseInt(t.id) || 0})" class="ticket-reply-form">
             <textarea name="reply" placeholder="Type your reply..." required></textarea>
             <button type="submit" class="btn btn-primary btn-sm">Reply & Resolve</button>
           </form>
@@ -2469,4 +2488,106 @@ document.addEventListener('DOMContentLoaded', () => {
   if (cardAvatars) cardAvatars.addEventListener('click', openAvatarPanel);
   if (cardVoices) cardVoices.addEventListener('click', openVoicePanel);
   if (cardPresentations) cardPresentations.addEventListener('click', openPresPanel);
+
+  // Password strength indicator
+  const pwInput = document.getElementById('authPassword');
+  if (pwInput) {
+    pwInput.addEventListener('input', () => {
+      const el = document.getElementById('passwordStrength');
+      if (!el || el.style.display === 'none') return;
+      const pw = pwInput.value;
+      const err = validatePasswordStrength(pw);
+      if (!pw) { el.textContent = ''; return; }
+      if (err) {
+        el.style.color = '#ef4444';
+        el.textContent = '✗ ' + err;
+      } else {
+        el.style.color = '#22c55e';
+        el.textContent = '✓ Strong password';
+      }
+    });
+  }
 });
+
+// ==================== PASSWORD STRENGTH ====================
+function validatePasswordStrength(pw) {
+  if (pw.length < 8) return 'At least 8 characters required';
+  if (!/[A-Z]/.test(pw)) return 'Add an uppercase letter';
+  if (!/[a-z]/.test(pw)) return 'Add a lowercase letter';
+  if (!/[0-9]/.test(pw)) return 'Add a digit';
+  if (!/[!@#$%^&*()_+\-=\[\]{}|;:\'",.<>?\/`~]/.test(pw)) return 'Add a special character (!@#$%...)';
+  return null;
+}
+
+// ==================== DPDP ACT PRIVACY FUNCTIONS ====================
+function showPrivacyPolicy(e) {
+  if (e) e.preventDefault();
+  viewPrivacyPolicy();
+}
+
+async function viewPrivacyPolicy() {
+  try {
+    const res = await fetch(`${API_BASE}/auth/privacy/policy`);
+    const data = await res.json();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'display:flex;align-items:center;justify-content:center;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;';
+    modal.innerHTML = `<div style="background:#1a1a2e;border-radius:16px;padding:32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;color:#fff;">
+      <h2 style="margin:0 0 16px;">🔒 Privacy Policy</h2>
+      <p style="color:#94a3b8;font-size:13px;">Version ${escapeHtml(data.policy_version)} • Effective: ${escapeHtml(data.effective_date)}</p>
+      <h4 style="margin-top:20px;">Data We Collect</h4>
+      <ul style="color:#cbd5e1;font-size:13px;">${data.data_collected.map(d => '<li>' + escapeHtml(d) + '</li>').join('')}</ul>
+      <h4>Purpose of Processing</h4>
+      <ul style="color:#cbd5e1;font-size:13px;">${data.purpose.map(p => '<li>' + escapeHtml(p) + '</li>').join('')}</ul>
+      <h4>Your Rights (DPDP Act 2023)</h4>
+      <ul style="color:#cbd5e1;font-size:13px;">${data.user_rights.map(r => '<li>' + escapeHtml(r) + '</li>').join('')}</ul>
+      <h4>Data Sharing</h4>
+      <p style="color:#cbd5e1;font-size:13px;">${escapeHtml(data.data_sharing)}</p>
+      <h4>Data Retention</h4>
+      <p style="color:#cbd5e1;font-size:13px;">${escapeHtml(data.data_retention)}</p>
+      <h4>Applicable Law</h4>
+      <p style="color:#cbd5e1;font-size:13px;">${escapeHtml(data.applicable_law)}</p>
+      <button onclick="this.closest('.modal-overlay').remove()" class="btn btn-primary" style="margin-top:20px;width:100%;">Close</button>
+    </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+  } catch {
+    showToast('Failed to load privacy policy', 'error');
+  }
+}
+
+async function exportMyData() {
+  if (!state.token) return showToast('Please sign in first', 'error');
+  try {
+    const res = await apiRequest('/auth/privacy/my-data');
+    if (!res.ok) throw new Error('Export failed');
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `presenterai-data-export-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Data exported successfully', 'success');
+  } catch {
+    showToast('Failed to export data', 'error');
+  }
+}
+
+async function deleteMyAccount() {
+  if (!state.token) return showToast('Please sign in first', 'error');
+  const confirmed = confirm('⚠️ PERMANENT DELETION\n\nThis will permanently delete:\n• Your account\n• All presentations\n• All support tickets\n• All personal data\n\nThis action cannot be undone.\n\nAre you sure?');
+  if (!confirmed) return;
+  const doubleConfirm = confirm('Are you absolutely sure? Type OK to proceed with permanent deletion.');
+  if (!doubleConfirm) return;
+  try {
+    const res = await apiRequest('/auth/privacy/delete-account', { method: 'POST' });
+    if (!res.ok) throw new Error('Deletion failed');
+    clearSession();
+    showToast('Account and all data permanently deleted', 'success');
+    setTimeout(() => location.reload(), 1500);
+  } catch {
+    showToast('Failed to delete account. Please try again.', 'error');
+  }
+}

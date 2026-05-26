@@ -20,13 +20,15 @@ load_dotenv()
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-# Create FastAPI app
+# Create FastAPI app — disable Swagger/ReDoc in production to reduce attack surface
+_is_prod = os.getenv("ENVIRONMENT") == "production"
 app = FastAPI(
     title="PresenterAI API",
     description="AI Presentation Avatar Platform — Generate professional presenter videos from documents",
     version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 app.state.limiter = limiter
@@ -42,7 +44,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' https://presentation-api-558900038680.asia-south1.run.app https://accounts.google.com; "
+            "frame-src https://accounts.google.com; "
+            "object-src 'none'; "
+            "base-uri 'self'"
+        )
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return response
 
 
@@ -56,7 +70,7 @@ cors_origins = os.getenv(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in cors_origins],
-    allow_origin_regex=r"^https://[a-zA-Z0-9-]+\.vercel\.app$",
+    allow_origin_regex=r"^https://ai-presentation-avatar[a-zA-Z0-9-]*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],

@@ -38,6 +38,13 @@ class User(Base):
 		nullable=False,
 	)
 	last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+	# Security: brute-force protection
+	failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+	locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+	# DPDP Act: consent tracking
+	privacy_consent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
+	privacy_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+	data_deletion_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class SupportTicket(Base):

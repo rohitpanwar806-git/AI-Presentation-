@@ -30,9 +30,18 @@ if not DATABASE_URL:
 		DATABASE_URL = f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}/{db_name}"
 
 # Security Config
-SECRET_KEY = os.getenv("SECRET_KEY", "your-super-secret-key-change-in-production")
+_default_secret = "your-super-secret-key-change-in-production"
+SECRET_KEY = os.getenv("SECRET_KEY", _default_secret)
+if ENVIRONMENT == "production" and SECRET_KEY == _default_secret:
+	import secrets as _sec
+	SECRET_KEY = _sec.token_urlsafe(64)
+	print("WARNING: SECRET_KEY not set in production — auto-generated ephemeral key. Set SECRET_KEY env var!")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+# Security: max failed login attempts before temporary lockout
+MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
+LOGIN_LOCKOUT_MINUTES = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15"))
 
 # OAuth Config
 GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip() or None
