@@ -16,8 +16,67 @@ let state = {
   isLoading: false
 };
 
+// ==================== TTS ENGINE (Web Speech API) ====================
+const tts = {
+  synth: window.speechSynthesis,
+  voices: [],
+  currentUtterance: null,
+  isNarrating: false,
+
+  init() {
+    if (!this.synth) return;
+    this.voices = this.synth.getVoices();
+    if (this.synth.onvoiceschanged !== undefined) {
+      this.synth.onvoiceschanged = () => { this.voices = this.synth.getVoices(); };
+    }
+  },
+
+  findVoice(langCode, gender) {
+    // Try to match by language code
+    const lang = (langCode || 'en-US').replace('_', '-');
+    let candidates = this.voices.filter(v => v.lang.startsWith(lang.split('-')[0]));
+    // Try exact match first
+    const exact = this.voices.filter(v => v.lang.toLowerCase() === lang.toLowerCase());
+    if (exact.length) candidates = exact;
+    // Filter by gender if possible (heuristic: female names often contain female indicators)
+    if (gender && candidates.length > 1) {
+      const femaleHints = ['female', 'woman', 'zira', 'hazel', 'susan', 'karen', 'samantha', 'victoria', 'fiona'];
+      const maleHints = ['male', 'man', 'david', 'mark', 'james', 'daniel', 'george', 'alex'];
+      const hints = gender === 'female' ? femaleHints : maleHints;
+      const genderMatch = candidates.filter(v => hints.some(h => v.name.toLowerCase().includes(h)));
+      if (genderMatch.length) candidates = genderMatch;
+    }
+    return candidates[0] || this.voices.find(v => v.lang.startsWith('en')) || this.voices[0];
+  },
+
+  speak(text, langCode, gender, rate = 1.0, onEnd) {
+    if (!this.synth || !text) return;
+    this.stop();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voice = this.findVoice(langCode, gender);
+    if (voice) utterance.voice = voice;
+    utterance.rate = rate;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    if (onEnd) utterance.onend = onEnd;
+    utterance.onerror = () => { if (onEnd) onEnd(); };
+    this.currentUtterance = utterance;
+    this.synth.speak(utterance);
+  },
+
+  stop() {
+    if (this.synth) this.synth.cancel();
+    this.currentUtterance = null;
+  },
+
+  preview(text, langCode, gender) {
+    this.speak(text, langCode, gender, 1.0);
+  }
+};
+
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', () => {
+  tts.init();
   initNavbar();
   initUploadZone();
   initGoogleAuth();
@@ -815,6 +874,7 @@ function openViewer(presentation) {
 
 function closeViewer() {
   pausePlayback();
+  tts.stop();
   document.getElementById('presentationViewer').classList.remove('active');
   document.body.style.overflow = '';
   viewer.presentation = null;
@@ -850,6 +910,26 @@ function renderSlide() {
   contentEl.style.animation = 'none';
   contentEl.offsetHeight; // force reflow
   contentEl.style.animation = 'fadeInUp 0.5s ease';
+
+  // Narrate slide if playing
+  if (viewer.isPlaying) {
+    narrateSlide(slide);
+  }
+}
+
+function narrateSlide(slide) {
+  tts.stop();
+  // Build narration text from slide content
+  let narration = slide.title + '. ';
+  if (slide.body) narration += slide.body + ' ';
+  if (slide.bullets) narration += slide.bullets.join('. ') + '.';
+
+  // Get voice settings from the selected voice
+  const selectedVoice = voiceData.voices.find(v => v.id === voiceData.selectedId);
+  const lang = selectedVoice?.language || 'en-US';
+  const gender = selectedVoice?.gender || 'female';
+
+  tts.speak(narration, lang, gender, 0.95);
 }
 
 function togglePlayPause() {
@@ -865,6 +945,10 @@ function startPlayback() {
   document.getElementById('playPauseBtn').textContent = '⏸';
   document.getElementById('pipStatus').innerHTML = '<span class="pip-speaking-dot"></span> Speaking';
   document.getElementById('soundWaves').classList.remove('paused');
+
+  // Narrate current slide when starting
+  const slide = viewer.slides[viewer.currentSlide];
+  if (slide) narrateSlide(slide);
 
   viewer.timer = setInterval(() => {
     viewer.elapsed++;
@@ -894,6 +978,7 @@ function pausePlayback() {
   viewer.isPlaying = false;
   if (viewer.timer) clearInterval(viewer.timer);
   viewer.timer = null;
+  tts.stop();
   document.getElementById('playPauseBtn').textContent = '▶';
   const statusEl = document.getElementById('pipStatus');
   if (statusEl && !statusEl.textContent.includes('Finished')) {
@@ -904,6 +989,7 @@ function pausePlayback() {
 
 function nextSlide() {
   if (viewer.currentSlide < viewer.slides.length - 1) {
+    tts.stop();
     viewer.currentSlide++;
     viewer.elapsed = viewer.currentSlide * viewer.slideInterval;
     renderSlide();
@@ -913,6 +999,7 @@ function nextSlide() {
 
 function prevSlide() {
   if (viewer.currentSlide > 0) {
+    tts.stop();
     viewer.currentSlide--;
     viewer.elapsed = viewer.currentSlide * viewer.slideInterval;
     renderSlide();
@@ -1412,6 +1499,7 @@ function openVoicePanel() {
 }
 
 function closeVoicePanel() {
+  tts.stop();
   document.getElementById('voicePanel').classList.remove('active');
   document.body.style.overflow = '';
 }
@@ -1487,10 +1575,19 @@ function renderVoiceGrid(voices) {
         <div class="voice-tags">
           <span class="voice-tag">${v.style}</span>
           <span class="voice-tag">${v.gender}</span>
+          <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('${v.id}')" title="Preview voice">🔊 Preview</button>
         </div>
       </div>
     </div>
   `).join('');
+}
+
+function previewVoice(voiceId) {
+  const voice = voiceData.voices.find(v => v.id === voiceId);
+  if (!voice) return;
+  const text = voice.preview_text || `Hello! I'm ${voice.name}. I'll be presenting your content in a clear and professional manner.`;
+  tts.preview(text, voice.language, voice.gender);
+  showToast(`Playing preview: ${voice.name}`, 'success');
 }
 
 function selectVoice(id) {
