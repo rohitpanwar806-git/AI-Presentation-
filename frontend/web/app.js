@@ -387,16 +387,38 @@ function clearSession() {
 function showDashboard() {
   document.getElementById('landing').classList.add('hidden');
   document.getElementById('dashboard').classList.add('active');
+  document.getElementById('helpCentre')?.classList.remove('active');
+  document.getElementById('accountSettings')?.classList.remove('active');
   
-  // Update nav
+  // Update nav with profile dropdown
   document.getElementById('navLinks').style.display = 'none';
+  const name = state.user?.first_name || state.user?.email?.split('@')[0] || 'User';
+  const avatar = state.user?.avatar_url || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(name)}&backgroundColor=b6e3f4`;
+  const isAdmin = state.user?.is_admin;
   document.getElementById('navActions').innerHTML = `
-    <span style="font-size:13px;color:var(--text-secondary);">${state.user?.email || ''}</span>
-    <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+    <div class="profile-dropdown" id="profileDropdown">
+      <button class="profile-trigger" onclick="toggleProfileMenu()">
+        <img src="${avatar}" alt="${name}" class="profile-avatar">
+        <span class="profile-name">${name}</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 5L6 8L9 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="profile-menu" id="profileMenu">
+        <div class="profile-menu-header">
+          <img src="${avatar}" alt="${name}" class="profile-menu-avatar">
+          <div><strong>${name}</strong><br><span style="font-size:11px;color:#94a3b8">${state.user?.email || ''}</span></div>
+        </div>
+        <div class="profile-menu-divider"></div>
+        <button onclick="showDashboard();closeProfileMenu()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</button>
+        <button onclick="openAccountSettings();closeProfileMenu()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15 1.65 1.65 0 003 14.08V14a2 2 0 014 0v.09c0 .66.38 1.26 1 1.51z"/></svg> Account Settings</button>
+        <button onclick="openHelpCentre();closeProfileMenu()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="0.5"/></svg> Help Centre</button>
+        ${isAdmin ? '<button onclick="openAdminPanel();closeProfileMenu()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Admin Panel</button>' : ''}
+        <div class="profile-menu-divider"></div>
+        <button onclick="logout();closeProfileMenu()" class="profile-menu-danger"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</button>
+      </div>
+    </div>
   `;
 
   // Update welcome
-  const name = state.user?.first_name || state.user?.email?.split('@')[0] || 'User';
   document.getElementById('userName').textContent = name;
 
   // Load presentations
@@ -406,11 +428,212 @@ function showDashboard() {
 function showLanding() {
   document.getElementById('landing').classList.remove('hidden');
   document.getElementById('dashboard').classList.remove('active');
+  document.getElementById('helpCentre')?.classList.remove('active');
+  document.getElementById('accountSettings')?.classList.remove('active');
   document.getElementById('navLinks').style.display = '';
   document.getElementById('navActions').innerHTML = `
     <button class="btn btn-ghost" onclick="openAuth('signin')">Log In</button>
     <button class="btn btn-primary" onclick="openAuth('signup')">Get Started Free</button>
   `;
+}
+
+function toggleProfileMenu() {
+  document.getElementById('profileMenu')?.classList.toggle('open');
+}
+function closeProfileMenu() {
+  document.getElementById('profileMenu')?.classList.remove('open');
+}
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.profile-dropdown')) closeProfileMenu();
+});
+
+// ==================== HELP CENTRE ====================
+async function openHelpCentre() {
+  document.getElementById('landing').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('active');
+  document.getElementById('accountSettings')?.classList.remove('active');
+  document.getElementById('helpCentre').classList.add('active');
+  loadMyTickets();
+}
+
+async function loadMyTickets() {
+  try {
+    const resp = await apiCall('/auth/support/tickets');
+    const tickets = resp.items || [];
+    const container = document.getElementById('ticketsList');
+    if (!tickets.length) {
+      container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:40px">No tickets yet. Submit one if you need help!</p>';
+      return;
+    }
+    container.innerHTML = tickets.map(t => `
+      <div class="ticket-card ticket-${t.status}">
+        <div class="ticket-header">
+          <span class="ticket-category">${t.category}</span>
+          <span class="ticket-status status-${t.status}">${t.status}</span>
+        </div>
+        <h4>${t.subject}</h4>
+        <p>${t.description}</p>
+        ${t.admin_reply ? `<div class="ticket-reply"><strong>Admin Reply:</strong> ${t.admin_reply}</div>` : ''}
+        <span class="ticket-date">${new Date(t.created_at).toLocaleDateString()}</span>
+      </div>
+    `).join('');
+  } catch(e) { console.error('Failed to load tickets', e); }
+}
+
+async function submitTicket(e) {
+  e.preventDefault();
+  const form = e.target;
+  const subject = form.querySelector('[name=subject]').value.trim();
+  const category = form.querySelector('[name=category]').value;
+  const description = form.querySelector('[name=description]').value.trim();
+  if (!subject || !description) return showToast('Please fill all fields', 'error');
+  try {
+    await apiCall('/auth/support/tickets', 'POST', { subject, category, description });
+    showToast('Ticket submitted! We\'ll get back to you soon.', 'success');
+    form.reset();
+    loadMyTickets();
+  } catch(e) { showToast(e.message || 'Failed to submit ticket', 'error'); }
+}
+
+// ==================== ACCOUNT SETTINGS ====================
+async function openAccountSettings() {
+  document.getElementById('landing').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('active');
+  document.getElementById('helpCentre')?.classList.remove('active');
+  document.getElementById('accountSettings').classList.add('active');
+  populateAccountSettings();
+}
+
+function populateAccountSettings() {
+  const u = state.user || {};
+  document.getElementById('settingsFirstName').value = u.first_name || '';
+  document.getElementById('settingsLastName').value = u.last_name || '';
+  document.getElementById('settingsEmail').value = u.email || '';
+  document.getElementById('settingsGender').value = u.gender || '';
+  document.getElementById('settingsBio').value = u.bio || '';
+  // Show/hide password section based on login provider
+  const pwSection = document.getElementById('passwordSection');
+  if (u.login_provider === 'google') {
+    pwSection.style.display = 'none';
+  } else {
+    pwSection.style.display = '';
+  }
+}
+
+async function saveProfile(e) {
+  e.preventDefault();
+  try {
+    const resp = await apiCall('/auth/profile', 'PUT', {
+      first_name: document.getElementById('settingsFirstName').value.trim(),
+      last_name: document.getElementById('settingsLastName').value.trim(),
+      gender: document.getElementById('settingsGender').value.trim(),
+      bio: document.getElementById('settingsBio').value.trim(),
+    });
+    state.user = { ...state.user, ...resp };
+    showToast('Profile updated!', 'success');
+    showDashboard(); // refresh navbar
+    openAccountSettings(); // re-open settings
+  } catch(e) { showToast(e.message || 'Failed to update profile', 'error'); }
+}
+
+async function changePassword(e) {
+  e.preventDefault();
+  const current = document.getElementById('currentPassword').value;
+  const newPw = document.getElementById('newPassword').value;
+  const confirm = document.getElementById('confirmPassword').value;
+  if (newPw !== confirm) return showToast('Passwords do not match', 'error');
+  if (newPw.length < 8) return showToast('Password must be at least 8 characters', 'error');
+  try {
+    await apiCall('/auth/change-password', 'POST', { current_password: current, new_password: newPw });
+    showToast('Password changed successfully!', 'success');
+    document.getElementById('currentPassword').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+  } catch(e) { showToast(e.message || 'Failed to change password', 'error'); }
+}
+
+async function changeEmail(e) {
+  e.preventDefault();
+  const newEmail = document.getElementById('newEmail').value.trim();
+  const password = document.getElementById('emailChangePassword').value;
+  if (!newEmail || !password) return showToast('Fill all fields', 'error');
+  try {
+    const resp = await apiCall('/auth/change-email', 'POST', { new_email: newEmail, password });
+    state.user = { ...state.user, ...resp.user };
+    showToast('Email updated!', 'success');
+    document.getElementById('settingsEmail').value = newEmail;
+    document.getElementById('newEmail').value = '';
+    document.getElementById('emailChangePassword').value = '';
+  } catch(e) { showToast(e.message || 'Failed to change email', 'error'); }
+}
+
+// ==================== ADMIN PANEL ====================
+async function openAdminPanel() {
+  document.getElementById('landing').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('active');
+  document.getElementById('helpCentre')?.classList.remove('active');
+  document.getElementById('accountSettings')?.classList.remove('active');
+  document.getElementById('adminPanel').classList.add('active');
+  loadAdminUsers();
+  loadAdminTickets();
+}
+
+async function loadAdminUsers() {
+  try {
+    const resp = await apiCall('/auth/admin/users');
+    document.getElementById('adminUserCount').textContent = resp.total || 0;
+    document.getElementById('adminVerifiedCount').textContent = resp.verified || 0;
+    const container = document.getElementById('adminUsersList');
+    container.innerHTML = (resp.items || []).map(u => `
+      <tr>
+        <td>${u.name}</td>
+        <td>${u.email}</td>
+        <td><span class="badge ${u.is_verified ? 'badge-success' : 'badge-warning'}">${u.is_verified ? 'Verified' : 'Pending'}</span></td>
+        <td>${u.is_admin ? '⭐ Admin' : 'User'}</td>
+        <td>${new Date(u.created_at).toLocaleDateString()}</td>
+      </tr>
+    `).join('');
+  } catch(e) { console.error('Admin users load failed', e); }
+}
+
+async function loadAdminTickets() {
+  try {
+    const resp = await apiCall('/auth/admin/tickets');
+    document.getElementById('adminTicketCount').textContent = resp.total || 0;
+    document.getElementById('adminOpenTickets').textContent = resp.open || 0;
+    const container = document.getElementById('adminTicketsList');
+    container.innerHTML = (resp.items || []).map(t => `
+      <div class="admin-ticket">
+        <div class="admin-ticket-header">
+          <span class="ticket-category">${t.category}</span>
+          <span class="ticket-status status-${t.status}">${t.status}</span>
+          <span class="ticket-date">${new Date(t.created_at).toLocaleDateString()}</span>
+        </div>
+        <h4>${t.subject}</h4>
+        <p style="color:#94a3b8;font-size:12px">From: ${t.user_email}</p>
+        <p>${t.description}</p>
+        ${t.admin_reply ? `<div class="ticket-reply"><strong>Your Reply:</strong> ${t.admin_reply}</div>` : ''}
+        ${t.status === 'open' ? `
+          <form onsubmit="replyToTicket(event, ${t.id})" class="ticket-reply-form">
+            <textarea name="reply" placeholder="Type your reply..." required></textarea>
+            <button type="submit" class="btn btn-primary btn-sm">Reply & Resolve</button>
+          </form>
+        ` : ''}
+      </div>
+    `).join('') || '<p style="color:#94a3b8;text-align:center">No tickets</p>';
+  } catch(e) { console.error('Admin tickets load failed', e); }
+}
+
+async function replyToTicket(e, ticketId) {
+  e.preventDefault();
+  const reply = e.target.querySelector('[name=reply]').value.trim();
+  if (!reply) return;
+  try {
+    await apiCall(`/auth/admin/tickets/${ticketId}/reply`, 'POST', { reply, status: 'resolved' });
+    showToast('Ticket resolved!', 'success');
+    loadAdminTickets();
+  } catch(e) { showToast(e.message || 'Failed to reply', 'error'); }
 }
 
 // ==================== FILE UPLOAD ====================

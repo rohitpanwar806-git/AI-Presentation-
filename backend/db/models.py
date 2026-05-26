@@ -40,6 +40,21 @@ class User(Base):
 	last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class SupportTicket(Base):
+	"""Help centre support tickets."""
+	__tablename__ = "support_tickets"
+
+	id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+	user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+	subject: Mapped[str] = mapped_column(String(300), nullable=False)
+	category: Mapped[str] = mapped_column(String(50), default="general", nullable=False)
+	description: Mapped[str] = mapped_column(Text, nullable=False)
+	status: Mapped[str] = mapped_column(String(30), default="open", nullable=False)
+	admin_reply: Mapped[str | None] = mapped_column(Text, nullable=True)
+	created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+	updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+
+
 class Presentation(Base):
 	"""Persistent presentation storage — survives container restarts."""
 	__tablename__ = "presentations"

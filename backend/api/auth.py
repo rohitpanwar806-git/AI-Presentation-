@@ -143,6 +143,7 @@ _EMAIL_WRAPPER = """<!DOCTYPE html>
 body{{margin:0;padding:0;background:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}}
 .container{{max-width:560px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)}}
 .header{{background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:32px 40px;text-align:center}}
+.header img{{width:48px;height:48px;border-radius:12px;margin-bottom:10px}}
 .header h1{{color:#fff;margin:0;font-size:26px;font-weight:700;letter-spacing:-.5px}}
 .header p{{color:rgba(255,255,255,.85);margin:8px 0 0;font-size:14px}}
 .body{{padding:36px 40px}}
@@ -163,7 +164,7 @@ body{{margin:0;padding:0;background:#f4f6f9;font-family:-apple-system,BlinkMacSy
 .social a{{color:#94a3b8;text-decoration:none;margin:0 8px;font-size:12px}}
 </style></head><body>
 <div class="container">
-<div class="header"><h1>PresenterAI</h1><p>Create AI Presentations in Minutes</p></div>
+<div class="header"><img src="https://ai-presentation-avatar.vercel.app/logo.svg" alt="PresenterAI"><h1>Presenter AI</h1><p>DOCUMENT TO PRESENTER</p></div>
 <div class="body">{content}</div>
 <div class="footer">
 <p>PresenterAI — AI-Powered Presentation Avatars</p>
@@ -540,3 +541,142 @@ async def toggle_active(
 @router.post("/logout")
 async def logout() -> dict[str, str]:
 	return {"status": "ok"}
+
+
+# ──────────────── Account Settings Endpoints ────────────────
+
+class ChangePasswordRequest(BaseModel):
+	current_password: str
+	new_password: str = Field(min_length=8, max_length=128)
+
+
+class ChangeEmailRequest(BaseModel):
+	new_email: EmailStr
+	password: str
+
+
+@router.post("/change-password")
+async def change_password(
+	payload: ChangePasswordRequest,
+	db: Session = Depends(get_db),
+	current_user: User = Depends(_get_current_user),
+) -> dict[str, str]:
+	if not current_user.password_hash:
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Account uses Google sign-in. Password change not available.")
+	if not verify_password(payload.current_password, current_user.password_hash):
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+	current_user.password_hash = hash_password(payload.new_password)
+	db.commit()
+	return {"status": "ok", "message": "Password changed successfully"}
+
+
+@router.post("/change-email")
+async def change_email(
+	payload: ChangeEmailRequest,
+	db: Session = Depends(get_db),
+	current_user: User = Depends(_get_current_user),
+) -> dict[str, Any]:
+	if not current_user.password_hash:
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Account uses Google sign-in. Email change not available.")
+	if not verify_password(payload.password, current_user.password_hash):
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password is incorrect")
+	new_email = str(payload.new_email).strip().lower()
+	if db.query(User).filter(User.email == new_email).first():
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+	current_user.email = new_email
+	db.commit()
+	db.refresh(current_user)
+	return {"status": "ok", "message": "Email updated successfully", "user": _serialize_user(current_user)}
+
+
+# ──────────────── Support Ticket Endpoints ────────────────
+
+class CreateTicketRequest(BaseModel):
+	subject: str = Field(min_length=5, max_length=300)
+	category: str = Field(default="general", max_length=50)
+	description: str = Field(min_length=10, max_length=5000)
+
+
+class ReplyTicketRequest(BaseModel):
+	reply: str = Field(min_length=1, max_length=5000)
+	status: str = Field(default="resolved", max_length=30)
+
+
+def _serialize_ticket(ticket) -> dict[str, Any]:
+	return {
+		"id": ticket.id,
+		"user_id": ticket.user_id,
+		"subject": ticket.subject,
+		"category": ticket.category,
+		"description": ticket.description,
+		"status": ticket.status,
+		"admin_reply": ticket.admin_reply,
+		"created_at": ticket.created_at.isoformat() if ticket.created_at else None,
+		"updated_at": ticket.updated_at.isoformat() if ticket.updated_at else None,
+	}
+
+
+@router.post("/support/tickets")
+async def create_ticket(
+	payload: CreateTicketRequest,
+	db: Session = Depends(get_db),
+	current_user: User = Depends(_get_current_user),
+) -> dict[str, Any]:
+	from backend.db.models import SupportTicket
+	ticket = SupportTicket(
+		user_id=current_user.id,
+		subject=payload.subject.strip(),
+		category=payload.category.strip(),
+		description=payload.description.strip(),
+		status="open",
+	)
+	db.add(ticket)
+	db.commit()
+	db.refresh(ticket)
+	return _serialize_ticket(ticket)
+
+
+@router.get("/support/tickets")
+async def list_my_tickets(
+	db: Session = Depends(get_db),
+	current_user: User = Depends(_get_current_user),
+) -> dict[str, Any]:
+	from backend.db.models import SupportTicket
+	tickets = db.query(SupportTicket).filter(SupportTicket.user_id == current_user.id).order_by(SupportTicket.created_at.desc()).all()
+	return {"items": [_serialize_ticket(t) for t in tickets]}
+
+
+@router.get("/admin/tickets")
+async def list_all_tickets(
+	_: User = Depends(_require_admin),
+	db: Session = Depends(get_db),
+) -> dict[str, Any]:
+	from backend.db.models import SupportTicket
+	tickets = db.query(SupportTicket).order_by(SupportTicket.created_at.desc()).all()
+	# Attach user email to each ticket
+	user_ids = {t.user_id for t in tickets}
+	users = {u.id: u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+	items = []
+	for t in tickets:
+		d = _serialize_ticket(t)
+		d["user_email"] = users.get(t.user_id, "unknown")
+		items.append(d)
+	return {"total": len(items), "open": sum(1 for t in tickets if t.status == "open"), "items": items}
+
+
+@router.post("/admin/tickets/{ticket_id}/reply")
+async def reply_to_ticket(
+	ticket_id: int,
+	payload: ReplyTicketRequest,
+	_: User = Depends(_require_admin),
+	db: Session = Depends(get_db),
+) -> dict[str, Any]:
+	from backend.db.models import SupportTicket
+	ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+	if not ticket:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+	ticket.admin_reply = payload.reply.strip()
+	ticket.status = payload.status.strip()
+	db.commit()
+	db.refresh(ticket)
+	return _serialize_ticket(ticket)

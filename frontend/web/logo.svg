@@ -1,0 +1,36 @@
+<svg width="400" height="340" viewBox="0 0 400 340" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Presenter AI Logo</title>
+  <desc>Presenter AI logo featuring an AI avatar above a presentation podium with a video screen showing a waveform.</desc>
+
+  <!-- Card background -->
+  <rect x="0" y="0" width="400" height="340" rx="24" fill="#EEF2FF"/>
+
+  <!-- Avatar head -->
+  <circle cx="200" cy="88" r="34" fill="#38BDF8"/>
+  <!-- Face highlight -->
+  <circle cx="189" cy="79" r="9" fill="#7DD3FC" opacity="0.6"/>
+
+  <!-- Podium screen -->
+  <rect x="131" y="132" width="138" height="90" rx="10" fill="#0F172A"/>
+  <rect x="137" y="138" width="126" height="78" rx="7" fill="#1E40AF"/>
+
+  <!-- Waveform bars -->
+  <line x1="151" y1="164" x2="151" y2="184" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="165" y1="154" x2="165" y2="194" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="179" y1="160" x2="179" y2="188" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="193" y1="149" x2="193" y2="199" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="207" y1="157" x2="207" y2="191" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="221" y1="153" x2="221" y2="195" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="235" y1="162" x2="235" y2="186" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="249" y1="158" x2="249" y2="190" stroke="white" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Podium neck -->
+  <rect x="178" y="222" width="44" height="22" rx="4" fill="#334155"/>
+
+  <!-- Podium base -->
+  <rect x="156" y="242" width="88" height="28" rx="6" fill="#475569"/>
+
+  <!-- Brand name -->
+  <text x="200" y="306" font-family="'Helvetica Neue',Arial,sans-serif" font-size="26" font-weight="800" fill="#1E293B" text-anchor="middle">Presenter AI</text>
+  <text x="200" y="326" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="600" fill="#38BDF8" text-anchor="middle" letter-spacing="3">DOCUMENT TO PRESENTER</text>
+</svg>
