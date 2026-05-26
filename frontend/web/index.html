@@ -1101,6 +1101,270 @@ body {
   50% { opacity: 0.5; transform: scale(0.9); }
 }
 
+/* ===== PRESENTATION VIEWER ===== */
+.viewer-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: #000;
+  flex-direction: column;
+}
+.viewer-overlay.active { display: flex; }
+
+.viewer-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  z-index: 2;
+}
+.viewer-title { font-size: 15px; font-weight: 600; color: #fff; }
+.viewer-title span { font-size: 12px; color: rgba(255,255,255,0.5); margin-left: 12px; }
+.viewer-topbar-actions { display: flex; gap: 8px; }
+.viewer-topbar-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.viewer-topbar-btn:hover { background: rgba(255,255,255,0.12); }
+
+.viewer-stage {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.viewer-slides {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  position: relative;
+}
+.slide-content {
+  width: 100%;
+  max-width: 960px;
+  aspect-ratio: 16/9;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  position: relative;
+  overflow: hidden;
+}
+.slide-content::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 40%, rgba(108,92,231,0.1) 0%, transparent 60%),
+              radial-gradient(circle at 70% 60%, rgba(0,210,211,0.08) 0%, transparent 50%);
+}
+.slide-content * { position: relative; z-index: 1; }
+.slide-number {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.3);
+}
+.slide-content h2 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 16px;
+  line-height: 1.3;
+}
+.slide-content p {
+  font-size: 18px;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.6;
+  max-width: 700px;
+}
+.slide-content ul {
+  text-align: left;
+  margin-top: 12px;
+  list-style: none;
+  padding: 0;
+}
+.slide-content ul li {
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+  padding: 8px 0;
+  padding-left: 24px;
+  position: relative;
+}
+.slide-content ul li::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+/* Avatar PiP overlay */
+.avatar-pip {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 160px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  border: 2px solid rgba(108,92,231,0.4);
+  padding: 16px;
+  text-align: center;
+  z-index: 5;
+  transition: all 0.3s;
+}
+.avatar-pip:hover { border-color: var(--accent); }
+.avatar-pip img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin-bottom: 8px;
+  border: 2px solid rgba(108,92,231,0.5);
+}
+.avatar-pip .pip-name { font-size: 12px; font-weight: 600; color: #fff; }
+.avatar-pip .pip-status {
+  font-size: 10px;
+  color: var(--accent);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.pip-speaking-dot {
+  width: 6px; height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: speakPulse 1s ease-in-out infinite;
+}
+@keyframes speakPulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* Sound wave animation */
+.sound-waves {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  justify-content: center;
+  margin-top: 6px;
+}
+.sound-wave-bar {
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: waveAnim 0.8s ease-in-out infinite;
+}
+.sound-wave-bar:nth-child(1) { height: 4px; animation-delay: 0s; }
+.sound-wave-bar:nth-child(2) { height: 10px; animation-delay: 0.1s; }
+.sound-wave-bar:nth-child(3) { height: 6px; animation-delay: 0.2s; }
+.sound-wave-bar:nth-child(4) { height: 14px; animation-delay: 0.3s; }
+.sound-wave-bar:nth-child(5) { height: 8px; animation-delay: 0.15s; }
+.sound-wave-bar:nth-child(6) { height: 12px; animation-delay: 0.25s; }
+.sound-wave-bar:nth-child(7) { height: 5px; animation-delay: 0.05s; }
+@keyframes waveAnim {
+  0%, 100% { height: 3px; }
+  50% { height: 16px; }
+}
+.sound-waves.paused .sound-wave-bar { animation-play-state: paused; }
+
+/* Playback controls */
+.viewer-controls {
+  padding: 16px 24px 20px;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.viewer-progress {
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 2px;
+  cursor: pointer;
+  margin-bottom: 14px;
+  position: relative;
+}
+.viewer-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.3s linear;
+  position: relative;
+}
+.viewer-progress-fill::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: -3px;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.viewer-progress:hover .viewer-progress-fill::after { opacity: 1; }
+
+.viewer-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.controls-left, .controls-right { display: flex; align-items: center; gap: 12px; }
+.ctrl-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.ctrl-btn:hover { background: rgba(255,255,255,0.2); }
+.ctrl-btn.play-btn {
+  width: 48px; height: 48px;
+  background: var(--accent);
+  font-size: 18px;
+}
+.ctrl-btn.play-btn:hover { background: var(--accent-dark, #5a4de6); transform: scale(1.05); }
+.viewer-time { font-size: 13px; color: rgba(255,255,255,0.5); font-variant-numeric: tabular-nums; }
+.controls-center { display: flex; align-items: center; gap: 16px; }
+.slide-nav-info { font-size: 13px; color: rgba(255,255,255,0.5); }
+
+@media (max-width: 768px) {
+  .viewer-slides { padding: 16px; }
+  .slide-content { padding: 24px; }
+  .slide-content h2 { font-size: 22px; }
+  .slide-content p { font-size: 14px; }
+  .avatar-pip { width: 120px; bottom: 12px; right: 12px; padding: 10px; }
+  .avatar-pip img { width: 56px; height: 56px; }
+}
+
 /* ======= RESPONSIVE ======= */
 @media (max-width: 1024px) {
   .features-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1764,6 +2028,61 @@ body {
         </select>
       </div>
       <div id="presListContainer"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PRESENTATION VIEWER -->
+<div class="viewer-overlay" id="presentationViewer">
+  <div class="viewer-topbar">
+    <div class="viewer-title" id="viewerTitle">Presentation <span id="viewerMeta"></span></div>
+    <div class="viewer-topbar-actions">
+      <button class="viewer-topbar-btn" onclick="toggleViewerFullscreen()">⛶ Fullscreen</button>
+      <button class="viewer-topbar-btn" onclick="closeViewer()">✕ Close</button>
+    </div>
+  </div>
+  <div class="viewer-stage">
+    <div class="viewer-slides">
+      <div class="slide-content" id="slideContent">
+        <div class="slide-number" id="slideNumber">1 / 1</div>
+        <h2 id="slideTitle">Loading...</h2>
+        <p id="slideBody"></p>
+      </div>
+    </div>
+    <div class="avatar-pip" id="avatarPip">
+      <img id="pipAvatarImg" src="" alt="Avatar">
+      <div class="pip-name" id="pipAvatarName">AI Presenter</div>
+      <div class="pip-status" id="pipStatus">
+        <span class="pip-speaking-dot"></span> Speaking
+      </div>
+      <div class="sound-waves" id="soundWaves">
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewer-controls">
+    <div class="viewer-progress" id="viewerProgress" onclick="seekViewer(event)">
+      <div class="viewer-progress-fill" id="viewerProgressFill"></div>
+    </div>
+    <div class="viewer-controls-row">
+      <div class="controls-left">
+        <span class="viewer-time" id="viewerTimeElapsed">0:00</span>
+      </div>
+      <div class="controls-center">
+        <button class="ctrl-btn" onclick="prevSlide()" title="Previous slide">⏮</button>
+        <button class="ctrl-btn play-btn" id="playPauseBtn" onclick="togglePlayPause()">▶</button>
+        <button class="ctrl-btn" onclick="nextSlide()" title="Next slide">⏭</button>
+        <span class="slide-nav-info" id="slideNavInfo">Slide 1 of 1</span>
+      </div>
+      <div class="controls-right">
+        <span class="viewer-time" id="viewerTimeTotal">0:00</span>
+      </div>
     </div>
   </div>
 </div>

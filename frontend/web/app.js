@@ -560,16 +560,14 @@ function sortPresentations() {
 }
 
 async function viewPresentation(id) {
-  // Record view and show toast
-  try {
-    await apiRequest(`/presentations/${id}/view`, { method: 'POST' });
-    const p = presData.presentations.find(x => x.id === id);
-    if (p) p.analytics.views++;
+  // Record view
+  try { await apiRequest(`/presentations/${id}/view`, { method: 'POST' }); } catch {}
+  const p = presData.presentations.find(x => x.id === id);
+  if (p) {
+    p.analytics.views++;
     renderPresList();
-    showToast('Presentation opened — view recorded', 'success');
-  } catch {
-    showToast('Could not record view', 'error');
   }
+  openViewer(p);
 }
 
 function editPresentation(id) {
@@ -693,6 +691,261 @@ function formatFileSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+// ==================== PRESENTATION VIEWER ====================
+let viewer = {
+  presentation: null,
+  slides: [],
+  currentSlide: 0,
+  isPlaying: false,
+  timer: null,
+  elapsed: 0,
+  slideInterval: 8, // seconds per slide
+  avatarInfo: null,
+  voiceInfo: null,
+};
+
+function generateSlides(presentation) {
+  const title = presentation.title || presentation.filename || 'Untitled';
+  const fileType = presentation.file_type || 'Document';
+  const created = formatDate(presentation.created_at);
+
+  return [
+    {
+      title: title,
+      body: `${fileType} Presentation`,
+      bullets: null,
+      type: 'title'
+    },
+    {
+      title: 'Presentation Overview',
+      body: 'This AI-generated presentation covers the key topics from your uploaded document.',
+      bullets: [
+        'Content extracted and analyzed by AI',
+        'Presented by your selected avatar',
+        'Natural voice narration',
+        `Created on ${created}`
+      ],
+      type: 'content'
+    },
+    {
+      title: 'Key Highlights',
+      body: null,
+      bullets: [
+        'AI-powered content analysis and structuring',
+        'Professional avatar with natural gestures',
+        'Multi-language voice synthesis',
+        'Engagement tracking and analytics',
+        'Shareable presentation link'
+      ],
+      type: 'content'
+    },
+    {
+      title: 'Content Summary',
+      body: `Your ${fileType.toLowerCase()} "${title}" has been processed and formatted into a professional presentation. The AI presenter delivers your content with natural speech patterns and professional delivery.`,
+      bullets: null,
+      type: 'content'
+    },
+    {
+      title: 'Next Steps',
+      body: null,
+      bullets: [
+        'Customize avatar appearance and style',
+        'Choose from 80+ natural voices',
+        'Add custom branding elements',
+        'Share via link or embed code',
+        'Track viewer engagement analytics'
+      ],
+      type: 'content'
+    },
+    {
+      title: 'Thank You',
+      body: `Presented by AI • Powered by PresenterAI`,
+      bullets: null,
+      type: 'title'
+    }
+  ];
+}
+
+function openViewer(presentation) {
+  if (!presentation) return;
+  viewer.presentation = presentation;
+  viewer.slides = generateSlides(presentation);
+  viewer.currentSlide = 0;
+  viewer.elapsed = 0;
+  viewer.isPlaying = false;
+
+  // Resolve avatar
+  const avatarId = presentation.avatar_id;
+  if (avatarId && avatarData.avatars.length) {
+    viewer.avatarInfo = avatarData.avatars.find(a => a.id === avatarId) || null;
+  }
+  if (!viewer.avatarInfo) {
+    // Use a default avatar
+    viewer.avatarInfo = {
+      name: 'AI Presenter',
+      thumbnail: 'https://api.dicebear.com/9.x/personas/svg?seed=AIPresenter&backgroundColor=b6e3f4'
+    };
+  }
+
+  // Set up UI
+  document.getElementById('viewerTitle').childNodes[0].textContent = presentation.title || presentation.filename;
+  document.getElementById('viewerMeta').textContent = `${presentation.file_type} • ${formatFileSize(presentation.file_size)}`;
+  document.getElementById('pipAvatarImg').src = viewer.avatarInfo.thumbnail;
+  document.getElementById('pipAvatarName').textContent = viewer.avatarInfo.name;
+
+  const totalTime = viewer.slides.length * viewer.slideInterval;
+  document.getElementById('viewerTimeTotal').textContent = formatTime(totalTime);
+  document.getElementById('viewerTimeElapsed').textContent = '0:00';
+  document.getElementById('viewerProgressFill').style.width = '0%';
+
+  renderSlide();
+  document.getElementById('presentationViewer').classList.add('active');
+  document.body.style.overflow = 'hidden';
+
+  // Auto-play after a short delay
+  setTimeout(() => togglePlayPause(), 500);
+}
+
+function closeViewer() {
+  pausePlayback();
+  document.getElementById('presentationViewer').classList.remove('active');
+  document.body.style.overflow = '';
+  viewer.presentation = null;
+}
+
+function renderSlide() {
+  const slide = viewer.slides[viewer.currentSlide];
+  if (!slide) return;
+
+  const total = viewer.slides.length;
+  const num = viewer.currentSlide + 1;
+
+  document.getElementById('slideNumber').textContent = `${num} / ${total}`;
+  document.getElementById('slideNavInfo').textContent = `Slide ${num} of ${total}`;
+
+  const titleEl = document.getElementById('slideTitle');
+  const bodyEl = document.getElementById('slideBody');
+  const contentEl = document.getElementById('slideContent');
+
+  titleEl.textContent = slide.title;
+
+  // Build body content
+  let bodyHtml = '';
+  if (slide.body) {
+    bodyHtml += `<p>${escapeHtml(slide.body)}</p>`;
+  }
+  if (slide.bullets) {
+    bodyHtml += '<ul>' + slide.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('') + '</ul>';
+  }
+  bodyEl.innerHTML = bodyHtml;
+
+  // Animate slide in
+  contentEl.style.animation = 'none';
+  contentEl.offsetHeight; // force reflow
+  contentEl.style.animation = 'fadeInUp 0.5s ease';
+}
+
+function togglePlayPause() {
+  if (viewer.isPlaying) {
+    pausePlayback();
+  } else {
+    startPlayback();
+  }
+}
+
+function startPlayback() {
+  viewer.isPlaying = true;
+  document.getElementById('playPauseBtn').textContent = '⏸';
+  document.getElementById('pipStatus').innerHTML = '<span class="pip-speaking-dot"></span> Speaking';
+  document.getElementById('soundWaves').classList.remove('paused');
+
+  viewer.timer = setInterval(() => {
+    viewer.elapsed++;
+    const totalTime = viewer.slides.length * viewer.slideInterval;
+    const progress = (viewer.elapsed / totalTime) * 100;
+
+    document.getElementById('viewerProgressFill').style.width = Math.min(progress, 100) + '%';
+    document.getElementById('viewerTimeElapsed').textContent = formatTime(viewer.elapsed);
+
+    // Advance slide
+    const targetSlide = Math.floor(viewer.elapsed / viewer.slideInterval);
+    if (targetSlide !== viewer.currentSlide && targetSlide < viewer.slides.length) {
+      viewer.currentSlide = targetSlide;
+      renderSlide();
+    }
+
+    // End
+    if (viewer.elapsed >= totalTime) {
+      pausePlayback();
+      document.getElementById('pipStatus').innerHTML = '✅ Finished';
+      document.getElementById('soundWaves').classList.add('paused');
+    }
+  }, 1000);
+}
+
+function pausePlayback() {
+  viewer.isPlaying = false;
+  if (viewer.timer) clearInterval(viewer.timer);
+  viewer.timer = null;
+  document.getElementById('playPauseBtn').textContent = '▶';
+  const statusEl = document.getElementById('pipStatus');
+  if (statusEl && !statusEl.textContent.includes('Finished')) {
+    statusEl.innerHTML = '⏸ Paused';
+  }
+  document.getElementById('soundWaves').classList.add('paused');
+}
+
+function nextSlide() {
+  if (viewer.currentSlide < viewer.slides.length - 1) {
+    viewer.currentSlide++;
+    viewer.elapsed = viewer.currentSlide * viewer.slideInterval;
+    renderSlide();
+    updateProgress();
+  }
+}
+
+function prevSlide() {
+  if (viewer.currentSlide > 0) {
+    viewer.currentSlide--;
+    viewer.elapsed = viewer.currentSlide * viewer.slideInterval;
+    renderSlide();
+    updateProgress();
+  }
+}
+
+function seekViewer(event) {
+  const bar = document.getElementById('viewerProgress');
+  const rect = bar.getBoundingClientRect();
+  const pct = (event.clientX - rect.left) / rect.width;
+  const totalTime = viewer.slides.length * viewer.slideInterval;
+  viewer.elapsed = Math.floor(pct * totalTime);
+  viewer.currentSlide = Math.min(Math.floor(viewer.elapsed / viewer.slideInterval), viewer.slides.length - 1);
+  renderSlide();
+  updateProgress();
+}
+
+function updateProgress() {
+  const totalTime = viewer.slides.length * viewer.slideInterval;
+  const progress = (viewer.elapsed / totalTime) * 100;
+  document.getElementById('viewerProgressFill').style.width = Math.min(progress, 100) + '%';
+  document.getElementById('viewerTimeElapsed').textContent = formatTime(viewer.elapsed);
+}
+
+function toggleViewerFullscreen() {
+  const el = document.getElementById('presentationViewer');
+  if (!document.fullscreenElement) {
+    el.requestFullscreen?.() || el.webkitRequestFullscreen?.();
+  } else {
+    document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+  }
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 // ==================== API HELPER ====================
 function extractErrorMessage(data, fallback) {
   if (!data || !data.detail) return fallback;
@@ -798,6 +1051,13 @@ document.addEventListener('keydown', (e) => {
     closeAvatarPanel();
     closeVoicePanel();
     closePresPanel();
+    if (document.getElementById('presentationViewer')?.classList.contains('active')) closeViewer();
+  }
+  // Arrow keys for slide navigation when viewer is open
+  if (document.getElementById('presentationViewer')?.classList.contains('active')) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSlide();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSlide();
+    if (e.key === ' ') { e.preventDefault(); togglePlayPause(); }
   }
 });
 
