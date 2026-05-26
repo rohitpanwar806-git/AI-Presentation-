@@ -165,6 +165,16 @@ body {
   box-shadow: 0 8px 30px var(--accent-glow);
 }
 
+.btn-secondary {
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+.btn-secondary:hover {
+  background: rgba(99, 102, 241, 0.25);
+  transform: translateY(-1px);
+}
+
 .btn-lg { padding: 14px 28px; font-size: 16px; border-radius: var(--radius-lg); }
 
 .btn-danger {
@@ -1175,6 +1185,7 @@ body {
 }
 .gen-step.active { color: #6366f1; }
 .gen-step.done { color: #10b981; }
+.gen-step.error { color: #ef4444; }
 .gen-step-icon { width: 20px; text-align: center; }
 .gen-close {
   position: absolute;
@@ -1189,6 +1200,29 @@ body {
   width: 36px;
   height: 36px;
 }
+/* Mode toggle */
+.gen-mode-toggle {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  justify-content: center;
+}
+.gen-mode-option {
+  flex: 1;
+  background: rgba(30, 30, 60, 0.8);
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+}
+.gen-mode-option:hover { border-color: rgba(99, 102, 241, 0.5); }
+.gen-mode-option.active { border-color: #6366f1; background: rgba(99, 102, 241, 0.15); }
+.gen-mode-option input[type="radio"] { display: none; }
+.gen-mode-icon { font-size: 1.5rem; display: block; margin-bottom: 0.3rem; }
+.gen-mode-label { color: #fff; font-weight: 600; font-size: 0.9rem; display: block; }
+.gen-mode-desc { color: #94a3b8; font-size: 0.72rem; display: block; margin-top: 0.3rem; }
 
 /* ===== Q&A CHAT IN VIEWER ===== */
 .viewer-qa {
@@ -1283,6 +1317,157 @@ body {
 .qa-toggle-btn:hover { background: rgba(99, 102, 241, 0.3); }
 @media (max-width: 768px) {
   .viewer-qa { width: 100%; position: fixed; top: 50%; bottom: 0; border-left: none; border-top: 1px solid rgba(99,102,241,0.2); }
+}
+
+/* ===== CAPTIONS OVERLAY ===== */
+.viewer-captions {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 5;
+  backdrop-filter: blur(4px);
+}
+.viewer-captions.active { opacity: 1; }
+
+/* ===== QUIZ PANEL ===== */
+.quiz-progress {
+  padding: 8px 24px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+}
+.quiz-question {
+  padding: 20px 24px 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.5;
+}
+.quiz-options {
+  padding: 8px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.quiz-option {
+  padding: 14px 18px;
+  background: rgba(30, 32, 60, 0.8);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 10px;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+}
+.quiz-option:hover {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+}
+.quiz-option.correct {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+.quiz-option.wrong {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+.quiz-explanation {
+  padding: 12px 24px;
+  font-size: 0.85rem;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 8px;
+  margin: 0 24px;
+  line-height: 1.5;
+}
+
+/* ===== SCRIPT EDITOR ===== */
+.script-list {
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.script-item {
+  padding: 16px;
+  background: rgba(30, 32, 60, 0.6);
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.12);
+}
+.script-slide-label {
+  font-size: 0.8rem;
+  color: #a5b4fc;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.script-textarea {
+  width: 100%;
+  background: rgba(15, 16, 41, 0.8);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+}
+.script-textarea:focus { border-color: #6366f1; }
+.script-meta {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* ===== SUMMARY PANEL ===== */
+.summary-section {
+  margin-bottom: 20px;
+}
+.summary-section h4 {
+  color: #a5b4fc;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+.summary-section p {
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.summary-section ul {
+  padding-left: 20px;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.summary-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.summary-meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 16px;
+  background: rgba(30, 32, 60, 0.6);
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: #94a3b8;
 }
 
 /* ===== PRESENTATION VIEWER ===== */
@@ -1654,31 +1839,37 @@ body {
 /* Avatar grid */
 .avatar-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
 }
 .avatar-card {
   background: var(--bg-card);
   border: 2px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  padding: 20px 16px;
+  padding: 16px 12px;
   text-align: center;
   cursor: pointer;
   transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .avatar-card:hover { border-color: rgba(108,92,231,0.4); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
-.avatar-card.selected { border-color: var(--accent); background: rgba(108,92,231,0.08); }
+.avatar-card.selected { border-color: var(--accent); background: rgba(108,92,231,0.12); box-shadow: 0 0 0 3px rgba(108,92,231,0.2); }
 .avatar-card img {
-  width: 72px; height: 72px;
+  width: 80px; height: 80px;
   border-radius: 50%;
-  margin-bottom: 12px;
-  background: var(--glass);
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+  object-fit: cover;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  display: block;
 }
-.avatar-card .avatar-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.avatar-card .avatar-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+.avatar-card .avatar-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #fff; }
+.avatar-card .avatar-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 6px; }
 .avatar-card .avatar-badge {
   display: inline-block;
-  margin-top: 8px;
+  margin-top: auto;
   padding: 3px 8px;
   border-radius: 10px;
   font-size: 10px;
@@ -2234,6 +2425,20 @@ body {
   <div class="generate-card">
     <h2>🚀 Generate AI Presentation</h2>
     <p class="gen-subtitle">Your AI avatar will analyze the document and create a live presentation</p>
+    <div class="gen-mode-toggle">
+      <label class="gen-mode-option active" id="modeGenerate" onclick="setGenerateMode('generate')">
+        <input type="radio" name="genMode" value="generate" checked>
+        <span class="gen-mode-icon">✨</span>
+        <span class="gen-mode-label">Generate New</span>
+        <span class="gen-mode-desc">AI creates fresh slides from your document</span>
+      </label>
+      <label class="gen-mode-option" id="modeDeck" onclick="setGenerateMode('present_deck')">
+        <input type="radio" name="genMode" value="present_deck">
+        <span class="gen-mode-icon">📑</span>
+        <span class="gen-mode-label">Use Uploaded Deck</span>
+        <span class="gen-mode-desc">Present your original slides with AI narration</span>
+      </label>
+    </div>
     <div class="gen-summary">
       <div class="gen-item">
         <div class="gen-icon">📄</div>
@@ -2281,6 +2486,8 @@ body {
         <h2 id="slideTitle">Loading...</h2>
         <p id="slideBody"></p>
       </div>
+      <!-- Captions Overlay -->
+      <div class="viewer-captions" id="viewerCaptions"></div>
     </div>
     <div class="avatar-pip" id="avatarPip">
       <img id="pipAvatarImg" src="" alt="Avatar">
@@ -2328,9 +2535,46 @@ body {
         <span class="slide-nav-info" id="slideNavInfo">Slide 1 of 1</span>
       </div>
       <div class="controls-right">
+        <button class="ctrl-btn" onclick="openScriptEditor()" title="Edit Scripts">📝</button>
+        <button class="ctrl-btn" onclick="openQuizPanel()" title="Take Quiz">🧠</button>
+        <button class="ctrl-btn" onclick="openSummaryPanel()" title="Summary">📋</button>
+        <button class="ctrl-btn" onclick="publishPresentation()" title="Share">🔗</button>
         <span class="viewer-time" id="viewerTimeTotal">0:00</span>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Quiz Panel -->
+<div class="generate-overlay" id="quizPanel" style="z-index:3500;">
+  <div class="generate-card" style="max-width:600px;max-height:85vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 12px;">
+      <h3>🧠 Interactive Quiz</h3>
+      <button class="ctrl-btn" onclick="closeQuizPanel()">✕</button>
+    </div>
+    <div id="quizContent"></div>
+  </div>
+</div>
+
+<!-- Script Editor Panel -->
+<div class="generate-overlay" id="scriptEditor" style="z-index:3500;">
+  <div class="generate-card" style="max-width:700px;max-height:85vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 12px;">
+      <h3>📝 Narration Script Editor</h3>
+      <button class="ctrl-btn" onclick="closeScriptEditor()">✕</button>
+    </div>
+    <div id="scriptContent"></div>
+  </div>
+</div>
+
+<!-- Summary Panel -->
+<div class="generate-overlay" id="summaryPanel" style="z-index:3500;">
+  <div class="generate-card" style="max-width:600px;max-height:85vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 12px;">
+      <h3>📋 Document Summary</h3>
+      <button class="ctrl-btn" onclick="closeSummaryPanel()">✕</button>
+    </div>
+    <div id="summaryContent"></div>
   </div>
 </div>
 

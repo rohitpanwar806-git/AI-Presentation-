@@ -1,10 +1,13 @@
 """Authentication and admin endpoints."""
 
+import logging
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 import random
 import smtplib
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from google.auth.transport import requests as google_requests
@@ -111,25 +114,31 @@ def _generate_verification_code() -> str:
 
 def _send_verification_email(email: str, code: str) -> bool:
 	if not all([config.SMTP_HOST, config.SMTP_USERNAME, config.SMTP_PASSWORD, config.SMTP_FROM_EMAIL]):
+		logger.warning(f"SMTP not configured: HOST={bool(config.SMTP_HOST)}, USER={bool(config.SMTP_USERNAME)}, PASS={bool(config.SMTP_PASSWORD)}, FROM={bool(config.SMTP_FROM_EMAIL)}")
 		return False
 
-	msg = EmailMessage()
-	msg["Subject"] = "AI Presentation Avatar - Verify your email"
-	msg["From"] = config.SMTP_FROM_EMAIL
-	msg["To"] = email
-	msg.set_content(
-		"Your verification code is: "
-		f"{code}\n\n"
-		f"This code expires in {config.VERIFICATION_CODE_EXPIRE_MINUTES} minutes."
-	)
+	try:
+		msg = EmailMessage()
+		msg["Subject"] = "AI Presentation Avatar - Verify your email"
+		msg["From"] = config.SMTP_FROM_EMAIL
+		msg["To"] = email
+		msg.set_content(
+			"Your verification code is: "
+			f"{code}\n\n"
+			f"This code expires in {config.VERIFICATION_CODE_EXPIRE_MINUTES} minutes."
+		)
 
-	with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as server:
-		if config.SMTP_USE_TLS:
-			server.starttls()
-		server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
-		server.send_message(msg)
+		with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as server:
+			if config.SMTP_USE_TLS:
+				server.starttls()
+			server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+			server.send_message(msg)
 
-	return True
+		logger.info(f"Verification email sent to {email}")
+		return True
+	except Exception as e:
+		logger.error(f"SMTP send failed: {type(e).__name__}: {e}")
+		return False
 
 
 def _get_current_user(

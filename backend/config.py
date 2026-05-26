@@ -45,6 +45,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # LLM Config
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Voice Synthesis Config
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")

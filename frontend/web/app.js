@@ -32,31 +32,41 @@ const tts = {
   },
 
   findVoice(langCode, gender) {
-    // Try to match by language code
     const lang = (langCode || 'en-US').replace('_', '-');
     let candidates = this.voices.filter(v => v.lang.startsWith(lang.split('-')[0]));
-    // Try exact match first
+    // Prefer exact locale match
     const exact = this.voices.filter(v => v.lang.toLowerCase() === lang.toLowerCase());
     if (exact.length) candidates = exact;
-    // Filter by gender if possible (heuristic: female names often contain female indicators)
+
+    // Prioritize premium/neural voices (non-local = cloud-based, usually higher quality)
+    const premiumKeywords = ['online', 'natural', 'neural', 'premium', 'enhanced'];
+    const premium = candidates.filter(v => !v.localService || premiumKeywords.some(k => v.name.toLowerCase().includes(k)));
+    if (premium.length) candidates = premium;
+
+    // Filter by gender heuristic
     if (gender && candidates.length > 1) {
-      const femaleHints = ['female', 'woman', 'zira', 'hazel', 'susan', 'karen', 'samantha', 'victoria', 'fiona'];
-      const maleHints = ['male', 'man', 'david', 'mark', 'james', 'daniel', 'george', 'alex'];
+      const femaleHints = ['female', 'woman', 'zira', 'hazel', 'susan', 'karen', 'samantha', 'victoria', 'fiona', 'jenny', 'aria', 'sara', 'elsa', 'clara', 'emma', 'eva'];
+      const maleHints = ['male', 'man', 'david', 'mark', 'james', 'daniel', 'george', 'alex', 'guy', 'ryan', 'eric', 'brian', 'roger'];
       const hints = gender === 'female' ? femaleHints : maleHints;
       const genderMatch = candidates.filter(v => hints.some(h => v.name.toLowerCase().includes(h)));
       if (genderMatch.length) candidates = genderMatch;
     }
+
+    // Among remaining, prefer Microsoft or Google voices (usually better quality)
+    const preferred = candidates.filter(v => /microsoft|google/i.test(v.name));
+    if (preferred.length) return preferred[0];
+
     return candidates[0] || this.voices.find(v => v.lang.startsWith('en')) || this.voices[0];
   },
 
-  speak(text, langCode, gender, rate = 1.0, onEnd) {
+  speak(text, langCode, gender, rate = 0.95, onEnd) {
     if (!this.synth || !text) return;
     this.stop();
     const utterance = new SpeechSynthesisUtterance(text);
     const voice = this.findVoice(langCode, gender);
     if (voice) utterance.voice = voice;
     utterance.rate = rate;
-    utterance.pitch = 1.0;
+    utterance.pitch = 1.02;
     utterance.volume = 1.0;
     if (onEnd) utterance.onend = onEnd;
     utterance.onerror = () => { if (onEnd) onEnd(); };
@@ -70,7 +80,7 @@ const tts = {
   },
 
   preview(text, langCode, gender) {
-    this.speak(text, langCode, gender, 1.0);
+    this.speak(text, langCode, gender, 0.95);
   }
 };
 
@@ -80,7 +90,15 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavbar();
   initUploadZone();
   initGoogleAuth();
-  checkExistingSession();
+
+  // Check if this is a shared presentation URL
+  const params = new URLSearchParams(window.location.search);
+  const sharedToken = params.get('shared');
+  if (sharedToken) {
+    openSharedViewer(sharedToken);
+  } else {
+    checkExistingSession();
+  }
 });
 
 function initNavbar() {
@@ -849,7 +867,7 @@ function openViewer(presentation) {
     // Use a default avatar
     viewer.avatarInfo = {
       name: 'AI Presenter',
-      thumbnail: 'https://api.dicebear.com/9.x/personas/svg?seed=AIPresenter&backgroundColor=b6e3f4'
+      thumbnail: 'https://api.dicebear.com/9.x/avataaars/svg?seed=AIPresenter&backgroundColor=b6e3f4&top=shortFlat&mouth=smile'
     };
   }
 
@@ -868,8 +886,33 @@ function openViewer(presentation) {
   document.getElementById('presentationViewer').classList.add('active');
   document.body.style.overflow = 'hidden';
 
-  // Auto-play after a short delay
-  setTimeout(() => togglePlayPause(), 500);
+  // Show play prompt for first interaction (Web Speech API requires user gesture)
+  if (presentation._shared) {
+    _showPlayPrompt();
+  } else {
+    // For authenticated users opening their own presentations, try auto-play
+    setTimeout(() => togglePlayPause(), 500);
+  }
+}
+
+function _showPlayPrompt() {
+  let prompt = document.getElementById('playPromptOverlay');
+  if (!prompt) {
+    prompt = document.createElement('div');
+    prompt.id = 'playPromptOverlay';
+    prompt.style.cssText = 'position:fixed;inset:0;z-index:4000;background:rgba(10,10,30,0.85);display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;';
+    prompt.innerHTML = `
+      <div style="font-size:72px;margin-bottom:20px;animation:pulse 1.5s infinite;">▶</div>
+      <h2 style="color:#fff;margin-bottom:8px;font-family:system-ui;">Click to Start Presentation</h2>
+      <p style="color:#94a3b8;font-family:system-ui;">Your AI teacher is ready to present</p>
+    `;
+    prompt.onclick = () => {
+      prompt.remove();
+      tts.init(); // Re-init voices on user gesture
+      togglePlayPause();
+    };
+    document.body.appendChild(prompt);
+  }
 }
 
 function closeViewer() {
@@ -877,6 +920,12 @@ function closeViewer() {
   tts.stop();
   document.getElementById('presentationViewer').classList.remove('active');
   document.body.style.overflow = '';
+
+  // If shared viewer, redirect to homepage
+  if (viewer.presentation?._shared) {
+    window.location.href = window.location.origin;
+    return;
+  }
   viewer.presentation = null;
 }
 
@@ -919,17 +968,52 @@ function renderSlide() {
 
 function narrateSlide(slide) {
   tts.stop();
-  // Build narration text from slide content
-  let narration = slide.title + '. ';
-  if (slide.body) narration += slide.body + ' ';
-  if (slide.bullets) narration += slide.bullets.join('. ') + '.';
+  // Use custom script if available, otherwise build from slide content
+  const scripts = viewer.presentation?.scripts;
+  let narration = '';
+  if (scripts && scripts[viewer.currentSlide]) {
+    narration = scripts[viewer.currentSlide].narration || '';
+  }
+  if (!narration) {
+    // Build a natural, conversational narration from slide content
+    const slideIndex = viewer.currentSlide;
+    const totalSlides = viewer.slides.length;
+    let prefix = '';
+    if (slideIndex === 0) prefix = "Welcome! Let me present to you: ";
+    else if (slideIndex === totalSlides - 1) prefix = "To wrap up, ";
+    else if (slideIndex === 1) prefix = "Let's start with ";
+    else prefix = "";
+
+    narration = prefix + slide.title + '. ';
+    if (slide.body) narration += slide.body + ' ';
+    if (slide.bullets && slide.bullets.length) {
+      narration += slide.bullets.join('. ') + '.';
+    }
+  }
+
+  // Show captions
+  showCaption(narration);
 
   // Get voice settings from the selected voice
   const selectedVoice = voiceData.voices.find(v => v.id === voiceData.selectedId);
   const lang = selectedVoice?.language || 'en-US';
   const gender = selectedVoice?.gender || 'female';
 
-  tts.speak(narration, lang, gender, 0.95);
+  tts.speak(narration, lang, gender, 0.95, () => { hideCaption(); });
+}
+
+function showCaption(text) {
+  let el = document.getElementById('viewerCaptions');
+  if (!el) return;
+  // Show text with typing effect (truncate long text)
+  const display = text.length > 200 ? text.substring(0, 200) + '...' : text;
+  el.textContent = display;
+  el.classList.add('active');
+}
+
+function hideCaption() {
+  let el = document.getElementById('viewerCaptions');
+  if (el) el.classList.remove('active');
 }
 
 function togglePlayPause() {
@@ -945,6 +1029,11 @@ function startPlayback() {
   document.getElementById('playPauseBtn').textContent = '⏸';
   document.getElementById('pipStatus').innerHTML = '<span class="pip-speaking-dot"></span> Speaking';
   document.getElementById('soundWaves').classList.remove('paused');
+
+  // Ensure TTS voices are loaded (may need user gesture context)
+  if (tts.synth && tts.voices.length === 0) {
+    tts.voices = tts.synth.getVoices();
+  }
 
   // Narrate current slide when starting
   const slide = viewer.slides[viewer.currentSlide];
@@ -1044,7 +1133,14 @@ function formatTime(seconds) {
 let generateState = {
   presentationId: null,
   isGenerating: false,
+  mode: 'generate', // 'generate' or 'present_deck'
 };
+
+function setGenerateMode(mode) {
+  generateState.mode = mode;
+  document.getElementById('modeGenerate').classList.toggle('active', mode === 'generate');
+  document.getElementById('modeDeck').classList.toggle('active', mode === 'present_deck');
+}
 
 function openGeneratePanel() {
   const panel = document.getElementById('generatePanel');
@@ -1099,68 +1195,101 @@ async function startGeneration() {
   const progress = document.getElementById('genProgress');
   progress.classList.add('active');
 
-  // Animate steps
+  // Step management — only advance when real progress is confirmed
   const steps = ['genStep1', 'genStep2', 'genStep3', 'genStep4', 'genStep5'];
   let currentStep = 0;
 
-  function advanceStep() {
-    if (currentStep > 0) {
-      const prev = document.getElementById(steps[currentStep - 1]);
-      prev.classList.remove('active');
-      prev.classList.add('done');
-      prev.querySelector('.gen-step-icon').textContent = '✓';
-    }
-    if (currentStep < steps.length) {
-      const cur = document.getElementById(steps[currentStep]);
-      cur.classList.add('active');
-      cur.querySelector('.gen-step-icon').textContent = '◉';
-      currentStep++;
+  function resetSteps() {
+    steps.forEach(id => {
+      const el = document.getElementById(id);
+      el.classList.remove('active', 'done', 'error');
+      el.querySelector('.gen-step-icon').textContent = '○';
+    });
+    currentStep = 0;
+  }
+
+  function setStepActive(index) {
+    if (index < steps.length) {
+      const el = document.getElementById(steps[index]);
+      el.classList.add('active');
+      el.querySelector('.gen-step-icon').textContent = '◉';
     }
   }
 
-  advanceStep(); // Step 1: Extracting
+  function setStepDone(index) {
+    if (index < steps.length) {
+      const el = document.getElementById(steps[index]);
+      el.classList.remove('active');
+      el.classList.add('done');
+      el.querySelector('.gen-step-icon').textContent = '✓';
+    }
+  }
+
+  function setStepError(index) {
+    if (index < steps.length) {
+      const el = document.getElementById(steps[index]);
+      el.classList.remove('active');
+      el.classList.add('error');
+      el.querySelector('.gen-step-icon').textContent = '✕';
+    }
+  }
+
+  resetSteps();
+  setStepActive(0); // Step 1: Extracting document
 
   // Call the generate API
   const presId = generateState.presentationId;
   if (!presId) {
     showToast('No presentation to generate', 'error');
+    setStepError(0);
     generateState.isGenerating = false;
     btn.disabled = false;
     btn.textContent = '✨ Generate Presentation';
     return;
   }
 
-  // Simulate progress steps with timing
-  const stepTimer = setInterval(() => {
-    if (currentStep < steps.length) advanceStep();
-  }, 1500);
-
   try {
+    // Step 1 done → Step 2 active (after a realistic delay for extraction)
+    await new Promise(r => setTimeout(r, 800));
+    setStepDone(0);
+    setStepActive(1); // Analyzing key topics
+
     const res = await apiRequest(`/presentations/${presId}/generate`, {
       method: 'POST',
       body: JSON.stringify({
         avatar_id: avatarData.selectedId || null,
-        voice_id: voiceData.selectedId || null
+        voice_id: voiceData.selectedId || null,
+        mode: generateState.mode || 'generate'
       })
     });
 
-    clearInterval(stepTimer);
-    // Mark all steps done
-    for (let i = 0; i < steps.length; i++) {
-      const step = document.getElementById(steps[i]);
-      step.classList.remove('active');
-      step.classList.add('done');
-      step.querySelector('.gen-step-icon').textContent = '✓';
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Server error (${res.status})`);
     }
 
-    if (res && res.status === 'success') {
+    const data = await res.json();
+
+    if (data && data.status === 'success') {
+      // Mark remaining steps done in sequence with visual feedback
+      setStepDone(1);
+      setStepActive(2);
+      await new Promise(r => setTimeout(r, 400));
+      setStepDone(2);
+      setStepActive(3);
+      await new Promise(r => setTimeout(r, 400));
+      setStepDone(3);
+      setStepActive(4);
+      await new Promise(r => setTimeout(r, 400));
+      setStepDone(4);
+
       // Store generated slides in the presentation
       const pres = presData.presentations.find(p => p.id === presId);
       if (pres) {
-        pres.slides = res.presentation.slides;
+        pres.slides = data.presentation.slides;
         pres.status = 'ready';
-        pres.avatar_id = res.presentation.avatar_id;
-        pres.voice_id = res.presentation.voice_id;
+        pres.avatar_id = data.presentation.avatar_id;
+        pres.voice_id = data.presentation.voice_id;
       }
 
       btn.textContent = '✅ Generated! Opening Viewer...';
@@ -1176,10 +1305,19 @@ async function startGeneration() {
         if (pres) openViewer(pres);
       }, 1500);
     } else {
-      throw new Error('Generation failed');
+      throw new Error(data?.detail || 'Generation failed — server returned an error');
     }
   } catch (err) {
-    clearInterval(stepTimer);
+    // Mark the current step as errored, leave previous done steps as-is
+    const failedStep = Math.min(currentStep, steps.length - 1);
+    // Find which step is currently active
+    for (let i = 0; i < steps.length; i++) {
+      const el = document.getElementById(steps[i]);
+      if (el.classList.contains('active')) {
+        setStepError(i);
+        break;
+      }
+    }
     btn.disabled = false;
     btn.textContent = '✨ Retry Generation';
     generateState.isGenerating = false;
@@ -1217,9 +1355,8 @@ async function sendQuestion() {
   // Show typing indicator
   const typingId = addQAMessage('Thinking...', 'assistant typing');
 
-  // Get presentation ID
-  const presId = viewer.presentation?.id;
-  if (!presId) {
+  const pres = viewer.presentation;
+  if (!pres) {
     removeQAMessage(typingId);
     addQAMessage("I couldn't find the presentation context. Please try again.", 'assistant');
     qaState.isAsking = false;
@@ -1228,19 +1365,40 @@ async function sendQuestion() {
   }
 
   try {
-    const res = await apiRequest(`/presentations/${presId}/ask`, {
-      method: 'POST',
-      body: JSON.stringify({
-        question: question,
-        chat_history: qaState.chatHistory.slice(-6)
-      })
-    });
+    let res;
+    if (pres._shared && pres._share_token) {
+      // Public shared viewer — use public Q&A endpoint (no auth)
+      res = await fetch(`${API_BASE}/shared/${pres._share_token}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, chat_history: qaState.chatHistory.slice(-6) })
+      });
+    } else {
+      // Authenticated user
+      res = await apiRequest(`/presentations/${pres.id}/ask`, {
+        method: 'POST',
+        body: JSON.stringify({ question, chat_history: qaState.chatHistory.slice(-6) })
+      });
+    }
 
     removeQAMessage(typingId);
 
-    if (res && res.answer) {
-      addQAMessage(res.answer, 'assistant');
-      qaState.chatHistory.push({ role: 'assistant', content: res.answer });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.answer) {
+        addQAMessage(data.answer, 'assistant');
+        qaState.chatHistory.push({ role: 'assistant', content: data.answer });
+
+        // Narrate the answer with the avatar's voice
+        if (viewer.isPlaying || pres._shared) {
+          const selectedVoice = voiceData.voices.find(v => v.id === voiceData.selectedId);
+          const lang = selectedVoice?.language || 'en-US';
+          const gender = selectedVoice?.gender || 'female';
+          tts.speak(data.answer, lang, gender, 0.95);
+        }
+      } else {
+        addQAMessage("I'm sorry, I couldn't process that question. Please try again.", 'assistant');
+      }
     } else {
       addQAMessage("I'm sorry, I couldn't process that question. Please try again.", 'assistant');
     }
@@ -1377,6 +1535,8 @@ document.addEventListener('keydown', (e) => {
     closePresPanel();
     if (document.getElementById('generatePanel')?.classList.contains('active')) closeGeneratePanel();
     if (document.getElementById('presentationViewer')?.classList.contains('active')) closeViewer();
+    if (document.getElementById('quizPanel')?.classList.contains('active')) closeQuizPanel();
+    if (document.getElementById('scriptEditor')?.classList.contains('active')) closeScriptEditor();
   }
   // Arrow keys for slide navigation when viewer is open
   if (document.getElementById('presentationViewer')?.classList.contains('active')) {
@@ -1386,7 +1546,394 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ==================== AVATAR SELECTION ====================
+
+// ==================== QUIZ PANEL ====================
+let quizState = { questions: [], currentQ: 0, score: 0, answered: [] };
+
+async function openQuizPanel() {
+  const pres = viewer.presentation;
+  if (!pres) return showToast('Open a presentation first', 'error');
+
+  const panel = document.getElementById('quizPanel');
+  if (!panel) return;
+  panel.classList.add('active');
+  document.getElementById('quizContent').innerHTML = '<div style="text-align:center;padding:40px;"><div class="loading-spinner"></div><p>Generating quiz questions...</p></div>';
+
+  // For shared presentations, use pre-loaded quiz data or generate via shared endpoint
+  if (pres._shared && pres._quiz && pres._quiz.length) {
+    quizState = { questions: pres._quiz, currentQ: 0, score: 0, answered: [] };
+    renderQuizQuestion();
+    return;
+  }
+
+  try {
+    let res;
+    if (pres._shared && pres._share_token) {
+      // Generate quiz for shared viewers via public Q&A (ask for quiz)
+      res = await fetch(`${API_BASE}/shared/${pres._share_token}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: '__generate_quiz__', chat_history: [] })
+      });
+    } else {
+      res = await fetch(`${API_BASE}/presentations/${pres.id}/quiz`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${state.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ num_questions: 5 })
+      });
+    }
+    const data = await res.json();
+    const quizData = data.quiz || pres._quiz;
+    if (quizData && quizData.length) {
+      quizState = { questions: quizData, currentQ: 0, score: 0, answered: [] };
+      renderQuizQuestion();
+    } else {
+      document.getElementById('quizContent').innerHTML = '<p style="text-align:center;padding:40px;color:var(--text-secondary);">Could not generate quiz. Try again after generating the presentation.</p>';
+    }
+  } catch (err) {
+    document.getElementById('quizContent').innerHTML = '<p style="text-align:center;padding:40px;color:#ef4444;">Failed to generate quiz. Please try again.</p>';
+  }
+}
+
+function renderQuizQuestion() {
+  const q = quizState.questions[quizState.currentQ];
+  if (!q) return renderQuizResults();
+
+  const total = quizState.questions.length;
+  const num = quizState.currentQ + 1;
+  const isAnswered = quizState.answered[quizState.currentQ] !== undefined;
+
+  let html = `
+    <div class="quiz-progress">Question ${num} of ${total} • Score: ${quizState.score}/${total}</div>
+    <div class="quiz-question">${escapeHtml(q.question)}</div>
+    <div class="quiz-options">
+  `;
+
+  q.options.forEach((opt, i) => {
+    let cls = 'quiz-option';
+    if (isAnswered) {
+      if (i === q.correct_answer) cls += ' correct';
+      else if (i === quizState.answered[quizState.currentQ] && i !== q.correct_answer) cls += ' wrong';
+    }
+    const disabled = isAnswered ? 'style="pointer-events:none"' : '';
+    html += `<div class="${cls}" ${disabled} onclick="answerQuiz(${i})">${escapeHtml(opt)}</div>`;
+  });
+
+  html += '</div>';
+  if (isAnswered) {
+    html += `<div class="quiz-explanation">💡 ${escapeHtml(q.explanation || '')}</div>`;
+    html += `<button class="btn-primary" onclick="nextQuizQuestion()" style="margin-top:16px;">${num < total ? 'Next Question →' : 'See Results'}</button>`;
+  }
+
+  document.getElementById('quizContent').innerHTML = html;
+}
+
+function answerQuiz(optionIndex) {
+  const q = quizState.questions[quizState.currentQ];
+  quizState.answered[quizState.currentQ] = optionIndex;
+  if (optionIndex === q.correct_answer) quizState.score++;
+  renderQuizQuestion();
+}
+
+function nextQuizQuestion() {
+  quizState.currentQ++;
+  renderQuizQuestion();
+}
+
+function renderQuizResults() {
+  const total = quizState.questions.length;
+  const pct = Math.round((quizState.score / total) * 100);
+  const emoji = pct >= 80 ? '🎉' : pct >= 60 ? '👍' : '📚';
+
+  document.getElementById('quizContent').innerHTML = `
+    <div style="text-align:center;padding:30px;">
+      <div style="font-size:48px;margin-bottom:16px;">${emoji}</div>
+      <h3 style="margin-bottom:8px;">Quiz Complete!</h3>
+      <p style="font-size:24px;font-weight:700;color:var(--accent);margin-bottom:8px;">${quizState.score} / ${total} correct (${pct}%)</p>
+      <p style="color:var(--text-secondary);margin-bottom:24px;">${pct >= 80 ? 'Excellent work!' : pct >= 60 ? 'Good effort! Review the slides for missed topics.' : 'Consider reviewing the presentation again.'}</p>
+      <button class="btn-primary" onclick="quizState.currentQ=0;quizState.score=0;quizState.answered=[];renderQuizQuestion();">Retry Quiz</button>
+    </div>
+  `;
+}
+
+function closeQuizPanel() {
+  document.getElementById('quizPanel')?.classList.remove('active');
+}
+
+
+// ==================== SCRIPT EDITOR ====================
+
+async function openScriptEditor() {
+  const pres = viewer.presentation;
+  if (!pres) return showToast('Open a presentation first', 'error');
+  if (!pres.slides || !pres.slides.length) return showToast('Generate presentation first', 'error');
+
+  const panel = document.getElementById('scriptEditor');
+  if (!panel) return;
+  panel.classList.add('active');
+
+  // If no scripts yet, generate them
+  if (!pres.scripts || !pres.scripts.length) {
+    document.getElementById('scriptContent').innerHTML = '<div style="text-align:center;padding:40px;"><div class="loading-spinner"></div><p>Generating narration scripts...</p></div>';
+    try {
+      const res = await fetch(`${API_BASE}/presentations/${pres.id}/scripts?style=professional`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${state.token}` }
+      });
+      const data = await res.json();
+      if (data.scripts) pres.scripts = data.scripts;
+    } catch (err) { /* fallback to empty */ }
+  }
+
+  renderScriptEditor();
+}
+
+function renderScriptEditor() {
+  const pres = viewer.presentation;
+  const scripts = pres?.scripts || [];
+  const slides = pres?.slides || [];
+
+  let html = '<div class="script-list">';
+  slides.forEach((slide, i) => {
+    const script = scripts[i] || { narration: '', duration_seconds: 10 };
+    html += `
+      <div class="script-item">
+        <div class="script-slide-label">Slide ${i + 1}: ${escapeHtml(slide.title)}</div>
+        <textarea class="script-textarea" id="script_${i}" rows="3" placeholder="Enter narration for this slide...">${escapeHtml(script.narration || '')}</textarea>
+        <div class="script-meta">${script.duration_seconds || 10}s estimated</div>
+      </div>
+    `;
+  });
+  html += '</div>';
+  html += '<div style="padding:16px;display:flex;gap:12px;justify-content:flex-end;">';
+  html += '<button class="btn-secondary" onclick="regenerateScripts()">🔄 Regenerate</button>';
+  html += '<button class="btn-primary" onclick="saveScripts()">💾 Save Scripts</button>';
+  html += '</div>';
+
+  document.getElementById('scriptContent').innerHTML = html;
+}
+
+async function regenerateScripts() {
+  const pres = viewer.presentation;
+  if (!pres) return;
+  document.getElementById('scriptContent').innerHTML = '<div style="text-align:center;padding:40px;"><div class="loading-spinner"></div><p>Regenerating scripts...</p></div>';
+  try {
+    const res = await fetch(`${API_BASE}/presentations/${pres.id}/scripts?style=professional`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    const data = await res.json();
+    if (data.scripts) { pres.scripts = data.scripts; renderScriptEditor(); }
+  } catch (err) { showToast('Failed to regenerate', 'error'); }
+}
+
+async function saveScripts() {
+  const pres = viewer.presentation;
+  if (!pres) return;
+  const slides = pres.slides || [];
+  const scripts = slides.map((_, i) => {
+    const el = document.getElementById(`script_${i}`);
+    return { slide_index: i, narration: el?.value || '', duration_seconds: Math.max(5, Math.ceil((el?.value?.split(' ').length || 10) / 2.5)) };
+  });
+
+  try {
+    const res = await fetch(`${API_BASE}/presentations/${pres.id}/scripts`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${state.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scripts })
+    });
+    if (res.ok) { pres.scripts = scripts; showToast('Scripts saved!', 'success'); }
+  } catch (err) { showToast('Failed to save', 'error'); }
+}
+
+function closeScriptEditor() {
+  document.getElementById('scriptEditor')?.classList.remove('active');
+}
+
+
+// ==================== SHARE / PUBLISH ====================
+
+async function publishPresentation() {
+  const pres = viewer.presentation;
+  if (!pres) return;
+  if (!pres.slides?.length) return showToast('Generate presentation first', 'error');
+
+  try {
+    const res = await fetch(`${API_BASE}/presentations/${pres.id}/publish`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    const data = await res.json();
+    if (data.share_token) {
+      pres.share_token = data.share_token;
+      const shareUrl = `${window.location.origin}?shared=${data.share_token}`;
+      showShareDialog(shareUrl, data.expires_in_hours || 24);
+    } else {
+      showToast(data.detail || 'Failed to publish', 'error');
+    }
+  } catch (err) { showToast('Publish failed', 'error'); }
+}
+
+function showShareDialog(url, expiryHours) {
+  const dialog = document.createElement('div');
+  dialog.className = 'generate-overlay active';
+  dialog.id = 'shareDialog';
+  dialog.style.zIndex = '3500';
+  dialog.innerHTML = `
+    <div class="generate-card" style="max-width:480px;">
+      <div style="text-align:center;padding:24px;">
+        <div style="font-size:48px;margin-bottom:16px;">🔗</div>
+        <h3 style="margin-bottom:8px;">Presentation Published!</h3>
+        <p style="color:var(--text-secondary);margin-bottom:6px;">Anyone with this link can view & ask questions</p>
+        <p style="color:#f59e0b;font-size:0.8rem;margin-bottom:20px;">⏱ Link expires in ${expiryHours} hours</p>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <input type="text" value="${url}" readonly id="shareUrlInput" style="flex:1;padding:10px 14px;border-radius:8px;border:1px solid var(--glass-border);background:var(--bg-card);color:#fff;font-size:13px;">
+          <button class="btn-primary" onclick="copyShareUrl()">📋 Copy</button>
+        </div>
+        <button class="btn-secondary" onclick="document.getElementById('shareDialog').remove()">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+}
+
+function copyShareUrl() {
+  const input = document.getElementById('shareUrlInput');
+  if (input) {
+    navigator.clipboard.writeText(input.value);
+    showToast('Link copied to clipboard!', 'success');
+  }
+}
+
+
+// ==================== SUMMARY PANEL ====================
+
+async function openSummaryPanel() {
+  const pres = viewer.presentation;
+  if (!pres) return;
+
+  const panel = document.getElementById('summaryPanel');
+  if (!panel) return;
+  panel.classList.add('active');
+  document.getElementById('summaryContent').innerHTML = '<div style="text-align:center;padding:40px;"><div class="loading-spinner"></div><p>Analyzing document...</p></div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/presentations/${pres.id}/summary`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    const data = await res.json();
+    if (data.summary) renderSummary(data.summary);
+    else document.getElementById('summaryContent').innerHTML = '<p style="padding:24px;color:var(--text-secondary);">Summary unavailable.</p>';
+  } catch (err) {
+    document.getElementById('summaryContent').innerHTML = '<p style="padding:24px;color:#ef4444;">Failed to load summary.</p>';
+  }
+}
+
+function renderSummary(summary) {
+  let html = '<div style="padding:20px;">';
+  html += `<div class="summary-section"><h4>📋 Executive Summary</h4><p>${escapeHtml(summary.executive_summary || '')}</p></div>`;
+  if (summary.key_points?.length) {
+    html += '<div class="summary-section"><h4>🎯 Key Points</h4><ul>';
+    summary.key_points.forEach(p => { html += `<li>${escapeHtml(p)}</li>`; });
+    html += '</ul></div>';
+  }
+  if (summary.topics?.length) {
+    html += '<div class="summary-section"><h4>📌 Topics</h4><div class="summary-tags">';
+    summary.topics.forEach(t => { html += `<span class="voice-tag">${escapeHtml(t)}</span>`; });
+    html += '</div></div>';
+  }
+  html += `<div class="summary-meta">
+    <span>📊 Difficulty: ${summary.difficulty_level || 'N/A'}</span>
+    <span>⏱ Read time: ${summary.estimated_read_time_minutes || '?'} min</span>
+    <span>👥 Audience: ${escapeHtml(summary.target_audience || 'General')}</span>
+  </div>`;
+  html += '</div>';
+  document.getElementById('summaryContent').innerHTML = html;
+}
+
+function closeSummaryPanel() {
+  document.getElementById('summaryPanel')?.classList.remove('active');
+}
+
+
+// ==================== SHARED VIEWER (PUBLIC) ====================
+
+let sharedViewerToken = null;
+let sharedChatHistory = [];
+
+async function openSharedViewer(token) {
+  sharedViewerToken = token;
+  sharedChatHistory = [];
+
+  // Hide the dashboard, show a loading state
+  document.getElementById('dashboardContent').style.display = 'none';
+  document.querySelector('.navbar')?.style.setProperty('display', 'none');
+
+  try {
+    const res = await fetch(`${API_BASE}/shared/${token}`);
+    if (res.status === 410) {
+      document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;background:#0a0a1e;color:#fff;font-family:system-ui;">
+        <div style="font-size:64px;margin-bottom:24px;">⏰</div>
+        <h2 style="margin-bottom:12px;">Link Expired</h2>
+        <p style="color:#94a3b8;max-width:400px;text-align:center;">This shared presentation link has expired (24-hour limit). Ask the creator for a new link.</p>
+      </div>`;
+      return;
+    }
+    if (!res.ok) {
+      document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;background:#0a0a1e;color:#fff;font-family:system-ui;">
+        <div style="font-size:64px;margin-bottom:24px;">🔍</div>
+        <h2 style="margin-bottom:12px;">Presentation Not Found</h2>
+        <p style="color:#94a3b8;">This link may be invalid or the presentation was removed.</p>
+      </div>`;
+      return;
+    }
+
+    const data = await res.json();
+    // Build a mock presentation object to reuse the viewer
+    const sharedPres = {
+      id: 'shared_' + token,
+      title: data.title,
+      slides: data.slides || [],
+      scripts: data.scripts || [],
+      avatar_id: data.avatar_id,
+      voice_id: data.voice_id,
+      file_type: 'Shared',
+      file_size: 0,
+      filename: data.title,
+      _shared: true,
+      _share_token: token,
+      _has_qa: data.has_qa,
+      _quiz: data.quiz || null,
+      _summary: data.summary || null,
+    };
+
+    // Open the viewer
+    openViewer(sharedPres);
+
+    // Update topbar for shared context
+    document.getElementById('viewerTitle').childNodes[0].textContent = data.title;
+    document.getElementById('viewerMeta').textContent = `Shared Presentation • ${data.total_slides} slides`;
+
+    // Hide creator-only buttons in shared mode but keep Quiz and Q&A
+    const controlsRight = document.querySelector('.controls-right');
+    if (controlsRight) {
+      const btns = controlsRight.querySelectorAll('.ctrl-btn');
+      btns.forEach(btn => {
+        const title = btn.getAttribute('title') || '';
+        if (['Edit Scripts', 'Share'].includes(title)) {
+          btn.style.display = 'none';
+        }
+      });
+    }
+  } catch (err) {
+    document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;background:#0a0a1e;color:#fff;font-family:system-ui;">
+      <div style="font-size:64px;margin-bottom:24px;">⚠️</div>
+      <h2>Connection Error</h2>
+      <p style="color:#94a3b8;">Could not load the shared presentation. Please try again.</p>
+    </div>`;
+  }
+}
+
 let avatarData = { avatars: [], categories: [], selectedId: null };
 
 function openAvatarPanel() {
@@ -1456,14 +2003,16 @@ function renderAvatarGrid(avatars) {
     grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No avatars match your filters</div>';
     return;
   }
-  grid.innerHTML = avatars.map(a => `
+  grid.innerHTML = avatars.map(a => {
+    const thumb = a.thumbnail || '';
+    return `
     <div class="avatar-card ${avatarData.selectedId === a.id ? 'selected' : ''}" onclick="selectAvatar('${a.id}')">
-      <img src="${a.thumbnail}" alt="${escapeHtml(a.name)}" loading="lazy">
+      <img src="${thumb}" alt="${escapeHtml(a.name)}" loading="lazy">
       <div class="avatar-name">${escapeHtml(a.name)}</div>
       <div class="avatar-desc">${escapeHtml(a.description)}</div>
       <span class="avatar-badge">${a.category}</span>
     </div>
-  `).join('');
+  `;}).join('');
 }
 
 function selectAvatar(id) {
