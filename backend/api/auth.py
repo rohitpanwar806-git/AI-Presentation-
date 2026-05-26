@@ -112,33 +112,116 @@ def _generate_verification_code() -> str:
 	return f"{random.randint(100000, 999999)}"
 
 
-def _send_verification_email(email: str, code: str) -> bool:
+def _send_email(to: str, subject: str, html_body: str, text_body: str) -> bool:
+	"""Send an HTML email via SMTP."""
 	if not all([config.SMTP_HOST, config.SMTP_USERNAME, config.SMTP_PASSWORD, config.SMTP_FROM_EMAIL]):
-		logger.warning(f"SMTP not configured: HOST={bool(config.SMTP_HOST)}, USER={bool(config.SMTP_USERNAME)}, PASS={bool(config.SMTP_PASSWORD)}, FROM={bool(config.SMTP_FROM_EMAIL)}")
+		logger.warning("SMTP not configured — skipping email send")
 		return False
-
 	try:
 		msg = EmailMessage()
-		msg["Subject"] = "AI Presentation Avatar - Verify your email"
-		msg["From"] = config.SMTP_FROM_EMAIL
-		msg["To"] = email
-		msg.set_content(
-			"Your verification code is: "
-			f"{code}\n\n"
-			f"This code expires in {config.VERIFICATION_CODE_EXPIRE_MINUTES} minutes."
-		)
+		msg["Subject"] = subject
+		msg["From"] = f"PresenterAI <{config.SMTP_FROM_EMAIL}>"
+		msg["To"] = to
+		msg.set_content(text_body)
+		msg.add_alternative(html_body, subtype="html")
 
 		with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as server:
 			if config.SMTP_USE_TLS:
 				server.starttls()
 			server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
 			server.send_message(msg)
-
-		logger.info(f"Verification email sent to {email}")
+		logger.info(f"Email sent to {to}: {subject}")
 		return True
 	except Exception as e:
 		logger.error(f"SMTP send failed: {type(e).__name__}: {e}")
 		return False
+
+
+_EMAIL_WRAPPER = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{{margin:0;padding:0;background:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}}
+.container{{max-width:560px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)}}
+.header{{background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:32px 40px;text-align:center}}
+.header h1{{color:#fff;margin:0;font-size:26px;font-weight:700;letter-spacing:-.5px}}
+.header p{{color:rgba(255,255,255,.85);margin:8px 0 0;font-size:14px}}
+.body{{padding:36px 40px}}
+.body h2{{color:#1e293b;font-size:20px;margin:0 0 12px}}
+.body p{{color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px}}
+.otp-box{{background:#f1f5f9;border:2px dashed #6366f1;border-radius:10px;text-align:center;padding:20px;margin:24px 0}}
+.otp-code{{font-size:36px;font-weight:800;color:#6366f1;letter-spacing:8px;font-family:'Courier New',monospace}}
+.otp-label{{font-size:12px;color:#94a3b8;margin-top:6px;text-transform:uppercase;letter-spacing:1px}}
+.cta{{display:inline-block;background:#6366f1;color:#fff!important;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;margin:8px 0 24px}}
+.cta:hover{{background:#4f46e5}}
+.tip{{background:#f8fafc;border-left:3px solid #6366f1;padding:14px 18px;border-radius:0 8px 8px 0;margin:20px 0}}
+.tip strong{{color:#1e293b;font-size:13px}}
+.tip p{{color:#64748b;font-size:13px;margin:4px 0 0}}
+.footer{{background:#f8fafc;padding:24px 40px;text-align:center;border-top:1px solid #e2e8f0}}
+.footer p{{color:#94a3b8;font-size:12px;margin:0 0 4px;line-height:1.6}}
+.footer a{{color:#6366f1;text-decoration:none}}
+.social{{margin:12px 0 0}}
+.social a{{color:#94a3b8;text-decoration:none;margin:0 8px;font-size:12px}}
+</style></head><body>
+<div class="container">
+<div class="header"><h1>PresenterAI</h1><p>Create AI Presentations in Minutes</p></div>
+<div class="body">{content}</div>
+<div class="footer">
+<p>PresenterAI — AI-Powered Presentation Avatars</p>
+<p><a href="https://ai-presentation-avatar.vercel.app">ai-presentation-avatar.vercel.app</a></p>
+<div class="social">
+<a href="https://ai-presentation-avatar.vercel.app">Website</a> &bull;
+<a href="https://github.com/rohitpanwar806-git/AI-Presentation-">GitHub</a>
+</div>
+</div>
+</div></body></html>"""
+
+
+def _send_verification_email(email: str, code: str) -> bool:
+	html_content = f"""
+<h2>Verify your email</h2>
+<p>Welcome to <strong>PresenterAI</strong>! Enter the code below to verify your email and start creating AI-hosted presentations.</p>
+<div class="otp-box">
+  <div class="otp-code">{code}</div>
+  <div class="otp-label">Verification Code</div>
+</div>
+<p>This code expires in <strong>{config.VERIFICATION_CODE_EXPIRE_MINUTES} minutes</strong>.</p>
+<div class="tip">
+  <strong>What's next?</strong>
+  <p>Upload a document, pick an avatar, and generate a presentation — all in under a minute.</p>
+</div>
+<p style="color:#94a3b8;font-size:12px;margin-top:24px">If you didn't create an account on PresenterAI, you can safely ignore this email.</p>
+"""
+	text = f"Your PresenterAI verification code is: {code}\nThis code expires in {config.VERIFICATION_CODE_EXPIRE_MINUTES} minutes."
+	return _send_email(email, "Your PresenterAI Verification Code", _EMAIL_WRAPPER.format(content=html_content), text)
+
+
+def _send_welcome_email(email: str, name: str) -> bool:
+	html_content = f"""
+<h2>Welcome to PresenterAI, {name}!</h2>
+<p>Your email is verified and your account is ready. Here's everything you need to create your first AI presentation:</p>
+
+<p style="text-align:center"><a class="cta" href="https://ai-presentation-avatar.vercel.app">Create Your First Presentation &rarr;</a></p>
+
+<div class="tip">
+  <strong>Quick Start</strong>
+  <p>Upload a PDF, PPTX, or DOCX &rarr; Pick an avatar &rarr; Generate a natural AI-hosted presentation with voice narration in seconds.</p>
+</div>
+
+<h2 style="font-size:16px;margin-top:28px">What you can do</h2>
+<p><strong>🎙️ AI Avatar Narration</strong> — Your presentation is narrated by a lifelike AI avatar that speaks naturally, like a real teacher.</p>
+<p><strong>📝 Smart Quiz Generation</strong> — Auto-generate quizzes from your content to test understanding.</p>
+<p><strong>💬 Q&amp;A with AI</strong> — Viewers can ask questions about the content and get instant answers.</p>
+<p><strong>🔗 Share Instantly</strong> — Generate a link and share with anyone — no login required for viewers.</p>
+
+<div class="tip">
+  <strong>Pro Tip</strong>
+  <p>Use "Use Uploaded Deck" mode to preserve your original slides exactly as they are, or "Generate New" to let AI create fresh slides from your document.</p>
+</div>
+
+<p>Excited to see what you'll create,<br><strong>The PresenterAI Team</strong></p>
+"""
+	text = f"Welcome to PresenterAI, {name}! Your account is verified. Start creating at https://ai-presentation-avatar.vercel.app"
+	return _send_email(email, f"Welcome to PresenterAI, {name}! 🎉", _EMAIL_WRAPPER.format(content=html_content), text)
 
 
 def _get_current_user(
@@ -284,6 +367,14 @@ async def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db
 
 	db.commit()
 	db.refresh(user)
+
+	# Send welcome email (fire-and-forget)
+	name = (user.first_name or user.email.split("@")[0]).strip()
+	try:
+		_send_welcome_email(user.email, name)
+	except Exception:
+		pass
+
 	return _create_auth_response(user, is_new_user=True)
 
 
