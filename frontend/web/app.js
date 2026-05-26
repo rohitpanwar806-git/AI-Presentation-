@@ -279,6 +279,8 @@ function switchTab(tab) {
     if (privacyField) privacyField.style.display = 'none';
     const pwStrength = document.getElementById('passwordStrength');
     if (pwStrength) pwStrength.style.display = 'none';
+    const pwInput = document.getElementById('authPassword');
+    if (pwInput) pwInput.placeholder = 'Enter your password';
   } else {
     tabSignin.classList.remove('active');
     tabSignup.classList.add('active');
@@ -291,6 +293,8 @@ function switchTab(tab) {
     if (privacyField) privacyField.style.display = 'block';
     const pwStrength = document.getElementById('passwordStrength');
     if (pwStrength) pwStrength.style.display = 'block';
+    const pwInput = document.getElementById('authPassword');
+    if (pwInput) pwInput.placeholder = 'Min 8 chars, upper+lower+digit+special';
   }
 }
 
@@ -541,14 +545,14 @@ async function loadMyTickets() {
       return;
     }
     container.innerHTML = tickets.map(t => `
-      <div class="ticket-card ticket-${t.status}">
+      <div class="ticket-card ticket-${escapeHtml(t.status || '')}">
         <div class="ticket-header">
-          <span class="ticket-category">${t.category}</span>
-          <span class="ticket-status status-${t.status}">${t.status}</span>
+          <span class="ticket-category">${escapeHtml(t.category || '')}</span>
+          <span class="ticket-status status-${escapeHtml(t.status || '')}">${escapeHtml(t.status || '')}</span>
         </div>
-        <h4>${t.subject}</h4>
-        <p>${t.description}</p>
-        ${t.admin_reply ? `<div class="ticket-reply"><strong>Admin Reply:</strong> ${t.admin_reply}</div>` : ''}
+        <h4>${escapeHtml(t.subject || '')}</h4>
+        <p>${escapeHtml(t.description || '')}</p>
+        ${t.admin_reply ? `<div class="ticket-reply"><strong>Admin Reply:</strong> ${escapeHtml(t.admin_reply)}</div>` : ''}
         <span class="ticket-date">${new Date(t.created_at).toLocaleDateString()}</span>
       </div>
     `).join('');

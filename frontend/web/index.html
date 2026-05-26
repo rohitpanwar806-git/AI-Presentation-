@@ -2063,6 +2063,8 @@ select option { background: #1e1e2e; color: #fff; }
   top: 50%;
   transform: translateY(-50%);
   font-size: 14px;
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Voice language select */
@@ -2267,10 +2269,11 @@ select option { background: #1e1e2e; color: #fff; }
   <section class="section" id="security">
     <div class="section-label">Enterprise Security</div>
     <h2 class="section-title">Built for the most demanding teams</h2>
-    <p class="section-sub">Your data is encrypted at rest and in transit. Your content stays private. Compliance-ready from day one.</p>
+    <p class="section-sub">Your data is encrypted at rest and in transit. Your content stays private. Compliant with India's DPDP Act 2023 and international standards.</p>
     <div class="security-badges">
       <div class="badge"><span class="badge-icon">🔒</span> SOC 2 Type II</div>
-      <div class="badge"><span class="badge-icon">🇪🇺</span> GDPR Compliant</div>
+      <div class="badge"><span class="badge-icon">�🇳</span> DPDP Act 2023</div>
+      <div class="badge"><span class="badge-icon">�🇪🇺</span> GDPR Compliant</div>
       <div class="badge"><span class="badge-icon">🛡️</span> AES-256 Encryption</div>
       <div class="badge"><span class="badge-icon">🔐</span> SSO / SAML</div>
       <div class="badge"><span class="badge-icon">📋</span> ISO 27001</div>
@@ -2296,9 +2299,10 @@ select option { background: #1e1e2e; color: #fff; }
         <a href="#features">Features</a>
         <a href="#security">Security</a>
         <a href="#how-it-works">How It Works</a>
+        <a href="#" onclick="viewPrivacyPolicy();return false;">Privacy Policy</a>
         <a href="mailto:support@presenterai.com">Contact</a>
       </div>
-      <div class="footer-copy">© 2026 PresenterAI. Powered by Google Cloud.</div>
+      <div class="footer-copy">© 2026 PresenterAI. Powered by Google Cloud. Compliant with India's DPDP Act 2023.</div>
     </div>
   </footer>
 </div>

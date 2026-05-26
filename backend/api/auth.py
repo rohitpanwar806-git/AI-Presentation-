@@ -625,10 +625,10 @@ async def privacy_policy() -> dict[str, Any]:
 		"data_retention": "Data is retained until you delete your account or request erasure",
 		"data_sharing": "We do not sell or share personal data with third parties except for essential service providers (Google Cloud, ElevenLabs for voice synthesis)",
 		"user_rights": [
-			"Right to access your data (GET /auth/privacy/my-data)",
-			"Right to erasure / deletion (POST /auth/privacy/delete-account)",
+			"Right to access and download all your personal data",
+			"Right to permanent erasure and account deletion",
 			"Right to withdraw consent at any time",
-			"Right to lodge a grievance",
+			"Right to lodge a grievance with the Data Protection Board of India",
 		],
 		"grievance_officer": "Contact us via the Help Centre or email the support address",
 		"applicable_law": "Digital Personal Data Protection Act, 2023 (India)",
